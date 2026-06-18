@@ -1,0 +1,1 @@
+# nj-handgun-trng-market-intel
