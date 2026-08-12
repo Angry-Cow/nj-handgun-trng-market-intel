@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "./supabase";
 
 type WhereFilterValue = string | number | boolean | Date | null;
@@ -34,6 +34,7 @@ export type UseQueryResult = {
   data: any;
   error: Error | null;
   isPending: boolean;
+  refetch: () => void;
 };
 
 function applyFilters(query: any, params?: UseQueryParams): any {
@@ -93,6 +94,9 @@ export function useQuery(entityName: string, params?: UseQueryParams): UseQueryR
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState<Error | null>(null);
   const [isPending, setIsPending] = useState(true);
+  const [refetchKey, setRefetchKey] = useState(0);
+
+  const refetch = useCallback(() => setRefetchKey((k) => k + 1), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -123,7 +127,7 @@ export function useQuery(entityName: string, params?: UseQueryParams): UseQueryR
     return () => {
       cancelled = true;
     };
-  }, [entityName, JSON.stringify(params)]);
+  }, [entityName, JSON.stringify(params), refetchKey]);
 
-  return { data, error, isPending };
+  return { data, error, isPending, refetch };
 }

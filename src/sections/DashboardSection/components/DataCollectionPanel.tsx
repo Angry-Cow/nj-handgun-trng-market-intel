@@ -75,6 +75,7 @@ export const DataCollectionPanel = () => {
     data: runs,
     isPending,
     error,
+    refetch: runsRefetch,
   } = useQuery("DataCollectionRun", {
     orderBy: { runDate: "desc" },
   });
@@ -93,6 +94,11 @@ export const DataCollectionPanel = () => {
       orderBy: { state: "asc" },
     },
   );
+
+  // Refetch runs helper - works even before runs are loaded
+  const refetchRuns = useCallback(() => {
+    runsRefetch();
+  }, [runsRefetch]);
 
   const [config, setConfig] = useState<RunConfig>(DEFAULT_CONFIG);
   const [expandConfig, setExpandConfig] = useState(false);
@@ -191,6 +197,7 @@ export const DataCollectionPanel = () => {
       const runId = created?.id;
       setConfig(DEFAULT_CONFIG);
       setExpandConfig(false);
+      refetchRuns();
       // Auto-start the run immediately
       if (runId) {
         await executeRun(runId, config.counties, config.types);
@@ -282,6 +289,7 @@ export const DataCollectionPanel = () => {
 
       try {
         await update(runId, { status: "running" });
+        refetchRuns();
 
         for (const county of counties) {
           if (abortRef.current) break;
@@ -349,6 +357,7 @@ export const DataCollectionPanel = () => {
           recordsFlagged: flagged,
           errorLog: errorLog || undefined,
         });
+        refetchRuns();
         const sourcesSummary = "Firecrawl + OpenStreetMap";
         setRunProgress((p) => ({
           ...p,
@@ -361,6 +370,7 @@ export const DataCollectionPanel = () => {
         await update(runId, { status: "failed", errorLog: msg }).catch(
           () => {},
         );
+        refetchRuns();
         setRunProgress((p) => ({ ...p, [runId]: `Failed: ${msg}` }));
       } finally {
         setRunningId(null);
@@ -396,6 +406,7 @@ export const DataCollectionPanel = () => {
   const handleDelete = async (id: string) => {
     try {
       await remove(id);
+      refetchRuns();
       setConfirmDelete(null);
     } catch (err) {
       console.error("Failed to delete run:", err);
