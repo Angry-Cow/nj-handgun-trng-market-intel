@@ -4,62 +4,6 @@ import { useMutation } from "@/lib/useMutation";
 
 const ALL_TYPES = ["range", "private instructor", "gun club", "retailer"];
 
-// US state name → 2-letter abbreviation (used by NRA finder)
-const STATE_ABBR: Record<string, string> = {
-  Alabama: "AL",
-  Alaska: "AK",
-  Arizona: "AZ",
-  Arkansas: "AR",
-  California: "CA",
-  Colorado: "CO",
-  Connecticut: "CT",
-  Delaware: "DE",
-  Florida: "FL",
-  Georgia: "GA",
-  Hawaii: "HI",
-  Idaho: "ID",
-  Illinois: "IL",
-  Indiana: "IN",
-  Iowa: "IA",
-  Kansas: "KS",
-  Kentucky: "KY",
-  Louisiana: "LA",
-  Maine: "ME",
-  Maryland: "MD",
-  Massachusetts: "MA",
-  Michigan: "MI",
-  Minnesota: "MN",
-  Mississippi: "MS",
-  Missouri: "MO",
-  Montana: "MT",
-  Nebraska: "NE",
-  Nevada: "NV",
-  "New Hampshire": "NH",
-  "New Jersey": "NJ",
-  "New Mexico": "NM",
-  "New York": "NY",
-  "North Carolina": "NC",
-  "North Dakota": "ND",
-  Ohio: "OH",
-  Oklahoma: "OK",
-  Oregon: "OR",
-  Pennsylvania: "PA",
-  "Rhode Island": "RI",
-  "South Carolina": "SC",
-  "South Dakota": "SD",
-  Tennessee: "TN",
-  Texas: "TX",
-  Utah: "UT",
-  Vermont: "VT",
-  Virginia: "VA",
-  Washington: "WA",
-  "West Virginia": "WV",
-  Wisconsin: "WI",
-  Wyoming: "WY",
-  "District of Columbia": "DC",
-  "Puerto Rico": "PR",
-};
-
 const STATUS_STYLES: Record<
   string,
   { dot: string; badge: string; label: string }
@@ -252,278 +196,61 @@ export const DataCollectionPanel = () => {
     }
   };
 
-  // ─── CORS-proxy fetch helper (corsproxy.io → allorigins fallback) ────
-  const proxiedFetch = useCallback(
-    async (targetUrl: string): Promise<Response> => {
-      const primaryProxy = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-      try {
-        const res = await fetch(primaryProxy);
-        if (res.ok) return res;
-        throw new Error(`corsproxy.io returned ${res.status}`);
-      } catch {
-        const fallback = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
-        return fetch(fallback);
-      }
-    },
-    [],
-  );
-
   type ProviderResult = {
     name: string;
     address: string;
     lat: number;
     lon: number;
+    website: string;
+    phone: string;
+    servicesOffered: string;
     sourceUrl: string;
-    confidence: number;
     sourceName: string;
+    confidence: number;
+    needsVerification: boolean;
   };
 
-  // ─── Source 1: Overpass API (OSM) — IMPROVED TAGS ────────────────────
-  const searchOverpass = useCallback(
+  // ─── Call edge function for server-side scraping ──────────────────────
+  const scanProviders = useCallback(
     async (
       county: string,
       state: string,
       providerType: string,
-    ): Promise<ProviderResult[]> => {
-      // instructors are not reliably tagged in OSM — skip
-      if (providerType === "private instructor") return [];
+    ): Promise<{
+      providers: ProviderResult[];
+      totalFound: number;
+      flagged: number;
+      sources: string;
+    }> => {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const apiUrl = `${supabaseUrl}/functions/v1/firecrawl-scan`;
 
-      // Comprehensive OSM tag queries based on official OSM wiki recommendations
-      const tagFilters: Record<string, string[]> = {
-        range: [
-          'nwr["leisure"="shooting_ground"]', // preferred tag for shooting ranges
-          'nwr["sport"="shooting"]', // general shooting sports
-          'nwr["amenity"="shooting_range"]', // legacy/alternate tag
-          'nwr["leisure"="shooting_range"]', // alternate tag
-          'nwr["sport"="shooting"]["shooting"="indoor_range"]', // indoor ranges
-        ],
-        "gun club": [
-          'nwr["leisure"="shooting_ground"]',
-          'nwr["leisure"="shooting_club"]',
-          'nwr["club"="shooting"]',
-          'nwr["sport"="shooting"]',
-        ],
-        retailer: [
-          'nwr["shop"="guns"]', // common tag
-          'nwr["shop"="gun"]', // alternate
-          'nwr["shop"="weapons"]',
-          'nwr["shop"="firearm"]',
-          'nwr["shop"="hunting"]', // often sell firearms
-        ],
-      };
+      const res = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${anonKey}`,
+        },
+        body: JSON.stringify({ county, state, providerType }),
+      });
 
-      const filters = tagFilters[providerType];
-      if (!filters) return [];
-
-      // State abbreviation for area query
-      const stateAbbr = STATE_ABBR[state] ?? state;
-
-      // Build union of all tag queries for this type
-      const tagUnion = filters.map((f) => `${f}(area.searchArea)`).join(";");
-
-      // Primary query: search by county name within state
-      const overpassQuery = `
-[out:json][timeout:45];
-area["name"="${state}"]["admin_level"="4"]->.stateArea;
-area["name"="${county} County"]["admin_level"~"5|6"](area.stateArea)->.searchArea;
-(${tagUnion};);
-out center tags;
-`.trim();
-
-      const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`;
-
-      try {
-        const res = await fetch(overpassUrl);
-        if (!res.ok) {
-          return [];
-        }
-        const json = await res.json();
-        let elements: Record<string, unknown>[] = json?.elements ?? [];
-
-        // Fallback: broader state-level search if county query returned nothing
-        if (elements.length === 0) {
-          const fallbackQuery = `
-[out:json][timeout:45];
-area["ISO3166-2"="US-${stateAbbr}"]->.searchArea;
-(${tagUnion};);
-out center tags;
-`.trim();
-          const res2 = await fetch(
-            `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(fallbackQuery)}`,
-          );
-          if (res2.ok) {
-            const json2 = await res2.json();
-            elements = json2?.elements ?? [];
-          }
-        }
-
-        return elements.map((el) => {
-          const tags = (el.tags as Record<string, string>) ?? {};
-          const lat =
-            (el.lat as number) ??
-            (el.center as Record<string, number>)?.lat ??
-            0;
-          const lon =
-            (el.lon as number) ??
-            (el.center as Record<string, number>)?.lon ??
-            0;
-          const houseNum = tags["addr:housenumber"] ?? "";
-          const street = tags["addr:street"] ?? "";
-          const city = tags["addr:city"] ?? county;
-          const postcode = tags["addr:postcode"] ?? "";
-          const addrParts = [
-            houseNum && street ? `${houseNum} ${street}` : street,
-            city,
-            state,
-            postcode,
-          ].filter(Boolean);
-          return {
-            name:
-              tags.name ||
-              tags["name:en"] ||
-              `${providerType.charAt(0).toUpperCase() + providerType.slice(1)} in ${county}`,
-            address: addrParts.join(", ") || `${county}, ${state}`,
-            lat,
-            lon,
-            sourceUrl: `https://www.openstreetmap.org/${el.type}/${el.id}`,
-            confidence: 80,
-            sourceName: "OpenStreetMap Overpass",
-          };
-        });
-      } catch {
-        return [];
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => "");
+        throw new Error(`Scan failed (${res.status}): ${errBody}`);
       }
+
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      return {
+        providers: data.providers ?? [],
+        totalFound: data.totalFound ?? 0,
+        flagged: data.flagged ?? 0,
+        sources: data.sources ?? "Firecrawl + OpenStreetMap",
+      };
     },
     [],
-  );
-
-  // ─── Source 2: Tactical Course Directory ─────────────────────────────
-  // https://www.tacticalcoursedirectory.com — searchable directory of
-  // firearms/tactical training courses. Scraped via CORS proxy.
-  const searchTacticalCourseDirectory = useCallback(
-    async (county: string, state: string): Promise<ProviderResult[]> => {
-      const stateAbbr = STATE_ABBR[state] ?? state;
-      // The site has a /search endpoint with ?state= and ?q= params
-      const searchUrl = `https://www.tacticalcoursedirectory.com/search?state=${encodeURIComponent(stateAbbr)}&q=${encodeURIComponent(county)}`;
-      try {
-        const res = await proxiedFetch(searchUrl);
-        if (!res.ok) return [];
-        const html = await res.text();
-
-        // Parse listing cards from HTML — the site uses <div class="listing-card"> or similar
-        const results: ProviderResult[] = [];
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, "text/html");
-
-        // Try multiple common selector patterns used by directory sites
-        const cards = Array.from(
-          doc.querySelectorAll(
-            ".listing-card, .course-card, .provider-card, .business-card, article.listing, .search-result-item, .result-card",
-          ),
-        );
-
-        for (const card of cards) {
-          const nameEl = card.querySelector(
-            "h2, h3, h4, .listing-title, .name, .title, .business-name",
-          );
-          const addressEl = card.querySelector(
-            ".address, .location, [class*='address'], [class*='location']",
-          );
-          const linkEl = card.querySelector(
-            "a[href]",
-          ) as HTMLAnchorElement | null;
-
-          const name = nameEl?.textContent?.trim() ?? "";
-          const address =
-            addressEl?.textContent?.trim() ?? `${county}, ${state}`;
-          const href = linkEl?.href ?? "";
-          const sourceUrl = href.startsWith("http")
-            ? href
-            : `https://www.tacticalcoursedirectory.com${href}`;
-
-          if (name) {
-            results.push({
-              name,
-              address: address || `${county}, ${state}`,
-              lat: 0,
-              lon: 0,
-              sourceUrl: sourceUrl || searchUrl,
-              confidence: 75,
-              sourceName: "Tactical Course Directory",
-            });
-          }
-        }
-
-        // Fallback: if no structured cards found, try to extract names from links
-        if (results.length === 0) {
-          const links = Array.from(
-            doc.querySelectorAll(
-              "a[href*='/listing'], a[href*='/course'], a[href*='/provider']",
-            ),
-          ) as HTMLAnchorElement[];
-          for (const link of links) {
-            const name = link.textContent?.trim() ?? "";
-            if (name && name.length > 3 && name.length < 120) {
-              const href = link.getAttribute("href") ?? "";
-              const sourceUrl = href.startsWith("http")
-                ? href
-                : `https://www.tacticalcoursedirectory.com${href}`;
-              results.push({
-                name,
-                address: `${county}, ${state}`,
-                lat: 0,
-                lon: 0,
-                sourceUrl,
-                confidence: 65,
-                sourceName: "Tactical Course Directory",
-              });
-            }
-          }
-        }
-
-        return results;
-      } catch {
-        return [];
-      }
-    },
-    [proxiedFetch],
-  );
-
-  // ─── USCCA/NRA REMOVED ───────────────────────────────────────────────
-  // These services don't have public APIs and their pages are JavaScript-
-  // rendered, making them impossible to scrape via CORS proxy. The earlier
-  // implementation returned no useful data. Removed to avoid false positives.
-  //
-  // For instructor data, we'd need a server-side scraper or official API access.
-
-  // ─── Multi-source orchestrator ────────────────────────────────────────
-  const searchProviders = useCallback(
-    async (
-      county: string,
-      state: string,
-      providerType: string,
-    ): Promise<ProviderResult[]> => {
-      // Source 1: Overpass OSM (ranges, clubs, retailers)
-      const overpassResults = await searchOverpass(county, state, providerType);
-
-      // Source 2: Tactical Course Directory (instructors + all types)
-      const tcdResults = await searchTacticalCourseDirectory(county, state);
-
-      const results = [...overpassResults, ...tcdResults];
-
-      // Deduplicate by normalized name similarity
-      const seen = new Set<string>();
-      return results.filter((r) => {
-        const key = r.name
-          .toLowerCase()
-          .replace(/[^a-z0-9]/g, "")
-          .substring(0, 20);
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-    },
-    [searchOverpass],
   );
 
   // ─── Execute a pending run ────────────────────────────────────────────
@@ -570,48 +297,39 @@ out center tags;
               [runId]: `Scanning ${county} › ${pType}…`,
             }));
 
-            // Rate-limit: Nominatim requires 1 req/sec
-            await new Promise((res) => setTimeout(res, 1200));
-
-            let results: Array<{
-              name: string;
-              address: string;
-              lat: number;
-              lon: number;
-              sourceUrl: string;
-            }> = [];
+            let scanResult: {
+              providers: ProviderResult[];
+              totalFound: number;
+              flagged: number;
+              sources: string;
+            } | null = null;
             try {
-              results = await searchProviders(county, state, pType);
+              scanResult = await scanProviders(county, state, pType);
             } catch (e) {
               errorLog += `Error scanning ${county}/${pType}: ${e instanceof Error ? e.message : e}\n`;
             }
 
+            const results = scanResult?.providers ?? [];
             totalScanned += results.length;
+            flagged += scanResult?.flagged ?? 0;
 
             for (const r of results) {
               if (abortRef.current) break;
-              // Rate-limit between geocoding calls
-              await new Promise((res) => setTimeout(res, 500));
-              const needsVerif = r.lat === 0 && r.lon === 0;
-              if (needsVerif) flagged++;
-              const confidence = needsVerif
-                ? Math.min(r.confidence - 10, 70)
-                : r.confidence;
               try {
                 await createCompetitor({
                   facilityName:
                     r.name ||
                     `${pType.charAt(0).toUpperCase() + pType.slice(1)} in ${county}`,
-                  address: r.address,
+                  address: r.address || `${county}, ${state}`,
                   county: county,
                   latitude: r.lat,
                   longitude: r.lon,
                   facilityType: pType,
-                  website: "",
-                  phone: "",
-                  servicesOffered: pType,
-                  dataConfidence: confidence,
-                  needsVerification: needsVerif,
+                  website: r.website || "",
+                  phone: r.phone || "",
+                  servicesOffered: r.servicesOffered || pType,
+                  dataConfidence: r.confidence,
+                  needsVerification: r.needsVerification,
                   sourceUrl: r.sourceUrl,
                   dateAccessed: new Date(),
                   notes: `Auto-collected via ${r.sourceName} — ${county}, ${state}`,
@@ -634,7 +352,7 @@ out center tags;
           recordsFlagged: flagged,
           errorLog: errorLog || undefined,
         });
-        const sourcesSummary = "Overpass OSM + Tactical Course Directory";
+        const sourcesSummary = "Firecrawl + OpenStreetMap";
         setRunProgress((p) => ({
           ...p,
           [runId]: abortRef.current
@@ -651,7 +369,7 @@ out center tags;
         setRunningId(null);
       }
     },
-    [runs, countyRecords, update, createCompetitor, searchProviders],
+    [runs, countyRecords, update, createCompetitor, scanProviders],
   );
 
   const handleCancelRun = () => {
