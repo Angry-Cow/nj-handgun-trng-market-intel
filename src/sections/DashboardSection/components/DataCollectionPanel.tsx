@@ -179,7 +179,7 @@ export const DataCollectionPanel = () => {
     }
     setLaunchError("");
     try {
-      await create({
+      const created = await create({
         runDate: new Date(),
         status: "pending",
         countiesIncluded: JSON.stringify(config.counties),
@@ -188,8 +188,13 @@ export const DataCollectionPanel = () => {
         yearRangeEnd: config.yearEnd,
         triggeredBy: config.trigger,
       });
+      const runId = created?.id;
       setConfig(DEFAULT_CONFIG);
       setExpandConfig(false);
+      // Auto-start the run immediately
+      if (runId) {
+        await executeRun(runId, config.counties, config.types);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to queue run.";
       setLaunchError(msg);
@@ -253,21 +258,13 @@ export const DataCollectionPanel = () => {
     [],
   );
 
-  // ─── Execute a pending run ────────────────────────────────────────────
-  const handleStartRun = useCallback(
-    async (runId: string) => {
-      const run = runs?.find((r) => r.id === runId);
-      if (!run) return;
-
-      let counties: string[] = [];
-      let types: string[] = [];
-      try {
-        counties = JSON.parse(run.countiesIncluded);
-      } catch {}
-      try {
-        types = JSON.parse(run.providerTypesIncluded);
-      } catch {}
-
+  // ─── Core run execution logic (shared by Queue Run and Start) ────────
+  const executeRun = useCallback(
+    async (
+      runId: string,
+      counties: string[],
+      types: string[],
+    ) => {
       // Find the state for each county from countyRecords
       const countyStateMap: Record<string, string> = {};
       (countyRecords ?? []).forEach((c) => {
@@ -369,7 +366,27 @@ export const DataCollectionPanel = () => {
         setRunningId(null);
       }
     },
-    [runs, countyRecords, update, createCompetitor, scanProviders],
+    [countyRecords, update, createCompetitor, scanProviders],
+  );
+
+  // ─── Start a pending run from the history table ──────────────────────
+  const handleStartRun = useCallback(
+    async (runId: string) => {
+      const run = runs?.find((r) => r.id === runId);
+      if (!run) return;
+
+      let counties: string[] = [];
+      let types: string[] = [];
+      try {
+        counties = JSON.parse(run.countiesIncluded);
+      } catch {}
+      try {
+        types = JSON.parse(run.providerTypesIncluded);
+      } catch {}
+
+      await executeRun(runId, counties, types);
+    },
+    [runs, executeRun],
   );
 
   const handleCancelRun = () => {

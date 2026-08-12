@@ -128,10 +128,15 @@ export const ProviderDetailPanel = ({ competitor, onClose, onFlyTo }: Props) => 
 
   const { update, isPending: isSaving } = useMutation("Competitor");
 
-  const { data: courses, isPending: coursesLoading } = useQuery("CourseOffering", {
-    where: { competitorId: competitor?.id ?? "" },
-    orderBy: { courseType: "asc" },
-  });
+  const { data: courses, isPending: coursesLoading } = useQuery(
+    "CourseOffering",
+    competitor
+      ? {
+          where: { competitorId: competitor.id },
+          orderBy: { courseType: "asc" },
+        }
+      : { limit: 0 },
+  );
 
   // Reset state whenever the selected competitor changes
   useEffect(() => {
