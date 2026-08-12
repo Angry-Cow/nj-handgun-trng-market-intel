@@ -1,5 +1,5 @@
 import React from "react";
-import { useQuery } from "@animaapp/playground-react-sdk";
+import { useQuery } from "@/lib/useQuery";
 
 function downloadMarkdown(filename: string, content: string) {
   const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });

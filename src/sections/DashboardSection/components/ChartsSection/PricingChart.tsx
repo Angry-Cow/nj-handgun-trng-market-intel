@@ -1,4 +1,4 @@
-import { useQuery } from "@animaapp/playground-react-sdk";
+import { useQuery } from "@/lib/useQuery";
 
 export const PricingChart = () => {
   const { data: competitors, isPending } = useQuery("Competitor");

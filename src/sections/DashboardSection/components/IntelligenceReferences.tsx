@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { useQuery, useMutation } from "@animaapp/playground-react-sdk";
+import { useQuery } from "@/lib/useQuery";
+import { useMutation } from "@/lib/useMutation";
 
 const US_STATES = [
   "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado",

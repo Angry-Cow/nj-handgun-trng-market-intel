@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useQuery } from "@animaapp/playground-react-sdk";
+import { useQuery } from "@/lib/useQuery";
 import { MapContainer } from "@/sections/DashboardSection/components/MapPanel/MapContainer";
 import { MapLegend } from "@/sections/DashboardSection/components/MapPanel/MapLegend";
 

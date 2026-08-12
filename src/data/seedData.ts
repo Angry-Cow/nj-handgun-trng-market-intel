@@ -1,4 +1,4 @@
-import type { CompetitorDraft, MarketForecastDraft, ResearchReportDraft, SourceLogDraft } from "./types";
+import type { CompetitorDraft, CountyDraft, MarketForecastDraft, ResearchReportDraft, SourceLogDraft } from "./types";
 
 export const COMPETITOR_SEED_DATA: CompetitorDraft[] = [
   {
@@ -897,4 +897,23 @@ export const SOURCE_LOG_SEED_DATA: SourceLogDraft[] = [
     recordsFound: 1,
     lastScrapeDate: new Date("2026-02-07"),
   },
+];
+
+
+export const COUNTY_SEED_DATA: CountyDraft[] = [
+  { county: "Bergen", state: "New Jersey" },
+  { county: "Essex", state: "New Jersey" },
+  { county: "Hudson", state: "New Jersey" },
+  { county: "Hunterdon", state: "New Jersey" },
+  { county: "Mercer", state: "New Jersey" },
+  { county: "Middlesex", state: "New Jersey" },
+  { county: "Monmouth", state: "New Jersey" },
+  { county: "Morris", state: "New Jersey" },
+  { county: "Passaic", state: "New Jersey" },
+  { county: "Somerset", state: "New Jersey" },
+  { county: "Sussex", state: "New Jersey" },
+  { county: "Union", state: "New Jersey" },
+  { county: "Warren", state: "New Jersey" },
+  { county: "Northampton", state: "Pennsylvania" },
+  { county: "Bucks", state: "Pennsylvania" },
 ];

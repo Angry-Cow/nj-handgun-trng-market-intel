@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import ReactDOM from "react-dom";
-import { useQuery } from "@animaapp/playground-react-sdk";
+import { useQuery } from "@/lib/useQuery";
 
 type FilterBarProps = {
   countyFilter: string[];

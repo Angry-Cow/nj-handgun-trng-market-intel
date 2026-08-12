@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useCallback } from "react";
-import { useQuery, useMutation } from "@animaapp/playground-react-sdk";
+import { useQuery } from "@/lib/useQuery";
+import { useMutation } from "@/lib/useMutation";
 
 const ALL_TYPES = ["range", "private instructor", "gun club", "retailer"];
 

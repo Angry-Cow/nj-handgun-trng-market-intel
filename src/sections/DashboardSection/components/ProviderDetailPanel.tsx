@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { useMutation, useQuery } from "@animaapp/playground-react-sdk";
+import { useMutation } from "@/lib/useMutation";
+import { useQuery } from "@/lib/useQuery";
 
 type Competitor = {
   id: string;

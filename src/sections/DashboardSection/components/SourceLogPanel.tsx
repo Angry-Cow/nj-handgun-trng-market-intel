@@ -1,5 +1,5 @@
 import React from "react";
-import { useQuery } from "@animaapp/playground-react-sdk";
+import { useQuery } from "@/lib/useQuery";
 
 const STATUS_STYLES: Record<string, { dot: string; badge: string; label: string }> = {
   Success: {

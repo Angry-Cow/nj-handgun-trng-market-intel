@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useQuery } from "@animaapp/playground-react-sdk";
+import { useQuery } from "@/lib/useQuery";
 import { StatCard } from "@/sections/DashboardSection/components/StatCard";
 import { FilterBar } from "@/sections/DashboardSection/components/FilterBar";
 import { MapPanel } from "@/sections/DashboardSection/components/MapPanel";

@@ -1,4 +1,4 @@
-import { useQuery } from "@animaapp/playground-react-sdk";
+import { useQuery } from "@/lib/useQuery";
 
 const STATEWIDE_YEARS = [2023, 2024, 2025, 2026, 2027, 2028];
 

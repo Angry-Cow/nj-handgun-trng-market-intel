@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { useQuery, useMutation } from "@animaapp/playground-react-sdk";
+import { useQuery } from "@/lib/useQuery";
+import { useMutation } from "@/lib/useMutation";
 import { TableFilters } from "@/sections/DashboardSection/components/CompetitorTable/TableFilters";
 import { AddCompetitorModal } from "@/sections/DashboardSection/components/CompetitorTable/AddCompetitorModal";
 

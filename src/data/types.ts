@@ -45,3 +45,8 @@ export type SourceLogDraft = {
   recordsFound: number;
   lastScrapeDate: Date;
 };
+
+export type CountyDraft = {
+  county: string;
+  state: string;
+};
