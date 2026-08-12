@@ -41,9 +41,11 @@ type ProviderResult = {
 async function firecrawlSearch(
   query: string,
 ): Promise<{ results: ProviderResult[]; error: string | null }> {
-  if (!FIRECRAWL_API_KEY) {
+    if (!FIRECRAWL_API_KEY) {
     return { results: [], error: "FIRECRAWL_API_KEY not set" };
   }
+
+  const REDDIT_DOMAINS = ["reddit.com", "www.reddit.com", "old.reddit.com"];
 
   try {
     const res = await fetch(`${FIRECRAWL_BASE}/search`, {
@@ -74,6 +76,7 @@ async function firecrawlSearch(
 
     const results = items
       .filter((item) => item.title && item.url)
+      .filter((item) => !REDDIT_DOMAINS.some((d) => item.url!.includes(d)))
       .map((item) => ({
         name: item.title!.trim(),
         address: "",

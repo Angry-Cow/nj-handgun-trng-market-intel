@@ -37,6 +37,15 @@ export type UseQueryResult = {
   refetch: () => void;
 };
 
+// Module-level refresh event system — allows any component to trigger
+// a refetch of all useQuery instances for a given entity name.
+const refreshListeners = new Map<string, Set<() => void>>();
+
+export function emitRefresh(entity: string) {
+  const set = refreshListeners.get(entity);
+  if (set) set.forEach((fn) => fn());
+}
+
 function applyFilters(query: any, params?: UseQueryParams): any {
   if (!params || typeof params === "string") {
     return query;
@@ -97,6 +106,19 @@ export function useQuery(entityName: string, params?: UseQueryParams): UseQueryR
   const [refetchKey, setRefetchKey] = useState(0);
 
   const refetch = useCallback(() => setRefetchKey((k) => k + 1), []);
+
+  // Subscribe to module-level refresh events for this entity
+  useEffect(() => {
+    if (!refreshListeners.has(entityName)) {
+      refreshListeners.set(entityName, new Set());
+    }
+    const set = refreshListeners.get(entityName)!;
+    set.add(refetch);
+    return () => {
+      set.delete(refetch);
+      if (set.size === 0) refreshListeners.delete(entityName);
+    };
+  }, [entityName, refetch]);
 
   useEffect(() => {
     let cancelled = false;

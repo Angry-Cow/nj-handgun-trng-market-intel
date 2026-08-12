@@ -29,7 +29,13 @@ export const MapPanel = ({ countyFilter, typeFilter, externalSelectedId, onExter
     ? new Set(
         allCompetitors
           .filter((c) => {
-            if (countyFilter.length > 0 && !countyFilter.includes(c.county)) return false;
+            if (countyFilter.length > 0) {
+              const match = countyFilter.some((cf) => {
+                const countyName = cf.includes(",") ? cf.split(",")[0].trim() : cf;
+                return c.county === countyName;
+              });
+              if (!match) return false;
+            }
             if (typeFilter && c.facilityType !== typeFilter) return false;
             return true;
           })

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback } from "react";
-import { useQuery } from "@/lib/useQuery";
+import { useQuery, emitRefresh } from "@/lib/useQuery";
 import { useMutation } from "@/lib/useMutation";
 
 const ALL_TYPES = ["range", "private instructor", "gun club", "retailer"];
@@ -86,6 +86,7 @@ export const DataCollectionPanel = () => {
     isPending: isMutating,
   } = useMutation("DataCollectionRun");
   const { create: createCompetitor } = useMutation("Competitor");
+  const { create: createSourceLog } = useMutation("SourceLog");
 
   // Fetch all counties from DB
   const { data: countyRecords, isPending: countiesLoading } = useQuery(
@@ -286,6 +287,7 @@ export const DataCollectionPanel = () => {
       let newRecords = 0;
       let flagged = 0;
       let errorLog = "";
+      const sourceLogEntries: { sourceName: string; status: string; recordsFound: number; lastScrapeDate: Date; sourceUrl: string; notes: string }[] = [];
 
       try {
         await update(runId, { status: "running" });
@@ -317,6 +319,18 @@ export const DataCollectionPanel = () => {
             const results = scanResult?.providers ?? [];
             totalScanned += results.length;
             flagged += scanResult?.flagged ?? 0;
+
+            // Track source log entry for this county/type scan
+            sourceLogEntries.push({
+              sourceName: `Firecrawl + OSM — ${county} County ${state} (${pType})`,
+              status: results.length > 0 ? "Success" : "Failed",
+              recordsFound: results.length,
+              lastScrapeDate: new Date(),
+              sourceUrl: "https://api.firecrawl.dev + https://overpass-api.de",
+              notes: results.length > 0
+                ? `Auto-scanned during run ${runId}`
+                : `No results returned${scanResult ? "" : " — scan error"}`,
+            });
 
             for (const r of results) {
               if (abortRef.current) break;
@@ -358,6 +372,20 @@ export const DataCollectionPanel = () => {
           errorLog: errorLog || undefined,
         });
         refetchRuns();
+
+        // Write SourceLog entries for each county/type scan
+        for (const entry of sourceLogEntries) {
+          try {
+            await createSourceLog(entry);
+          } catch (e) {
+            errorLog += `Failed to log source ${entry.sourceName}: ${e instanceof Error ? e.message : e}\n`;
+          }
+        }
+
+        // Refresh all Competitor and SourceLog data across the dashboard
+        emitRefresh("Competitor");
+        emitRefresh("SourceLog");
+        emitRefresh("DataCollectionRun");
         const sourcesSummary = "Firecrawl + OpenStreetMap";
         setRunProgress((p) => ({
           ...p,
@@ -376,7 +404,7 @@ export const DataCollectionPanel = () => {
         setRunningId(null);
       }
     },
-    [countyRecords, update, createCompetitor, scanProviders],
+    [countyRecords, update, createCompetitor, createSourceLog, scanProviders],
   );
 
   // ─── Start a pending run from the history table ──────────────────────

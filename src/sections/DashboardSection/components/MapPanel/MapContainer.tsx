@@ -379,7 +379,8 @@ export const MapContainer = ({ competitors, filteredIds, selectedId, onSelect }:
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
-    if (userSelectedRef.current) return;
+    // Reset user selection flag when filters change so auto-fit works
+    userSelectedRef.current = false;
 
     const activeCandidates = filteredIds
       ? competitors.filter((c) => filteredIds.has(c.id))

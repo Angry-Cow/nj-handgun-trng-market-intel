@@ -57,7 +57,13 @@ export const CompetitorTable = ({ countyFilter, typeFilter, priceFilter, onRowCl
   };
 
   const filtered = (competitors ?? []).filter((c) => {
-    if (countyFilter.length > 0 && !countyFilter.includes(c.county)) return false;
+    if (countyFilter.length > 0) {
+      const match = countyFilter.some((cf) => {
+        const countyName = cf.includes(",") ? cf.split(",")[0].trim() : cf;
+        return c.county === countyName;
+      });
+      if (!match) return false;
+    }
     if (typeFilter && c.facilityType !== typeFilter) return false;
     if (priceFilter === "<100" && (c.ccwPrepPrice ?? 9999) >= 100) return false;
     if (priceFilter === "100-199" && ((c.ccwPrepPrice ?? 0) < 100 || (c.ccwPrepPrice ?? 0) > 199)) return false;
