@@ -85,8 +85,9 @@ export const DataCollectionPanel = () => {
     remove,
     isPending: isMutating,
   } = useMutation("DataCollectionRun");
-  const { create: createCompetitor } = useMutation("Competitor");
+  const { create: createCompetitor, update: updateCompetitor } = useMutation("Competitor");
   const { create: createSourceLog } = useMutation("SourceLog");
+  const { data: existingCompetitors } = useQuery("Competitor");
 
   // Fetch all counties from DB
   const { data: countyRecords, isPending: countiesLoading } = useQuery(
@@ -285,6 +286,7 @@ export const DataCollectionPanel = () => {
 
       let totalScanned = 0;
       let newRecords = 0;
+      let updatedRecords = 0;
       let flagged = 0;
       let errorLog = "";
       const sourceLogEntries: { sourceName: string; status: string; recordsFound: number; lastScrapeDate: Date; sourceUrl: string; notes: string }[] = [];
@@ -335,10 +337,13 @@ export const DataCollectionPanel = () => {
             for (const r of results) {
               if (abortRef.current) break;
               try {
-                await createCompetitor({
-                  facilityName:
-                    r.name ||
-                    `${pType.charAt(0).toUpperCase() + pType.slice(1)} in ${county}`,
+                const normName = r.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+                const existing = (existingCompetitors ?? []).find(
+                  (c) => c.facilityName.toLowerCase().replace(/[^a-z0-9]/g, "") === normName,
+                );
+
+                const recordData = {
+                  facilityName: r.name || `${pType.charAt(0).toUpperCase() + pType.slice(1)} in ${county}`,
                   address: r.address || `${county}, ${state}`,
                   county: county,
                   latitude: r.lat,
@@ -352,8 +357,30 @@ export const DataCollectionPanel = () => {
                   sourceUrl: r.sourceUrl,
                   dateAccessed: new Date(),
                   notes: `Auto-collected via ${r.sourceName} — ${county}, ${state}`,
-                });
-                newRecords++;
+                };
+
+                if (existing) {
+                  // Update existing record with any new/better data
+                  const updates: Record<string, unknown> = {};
+                  if (recordData.website && !existing.website) updates.website = recordData.website;
+                  if (recordData.phone && !existing.phone) updates.phone = recordData.phone;
+                  if (recordData.latitude && existing.latitude === 0) updates.latitude = recordData.latitude;
+                  if (recordData.longitude && existing.longitude === 0) updates.longitude = recordData.longitude;
+                  if (recordData.address && existing.address === `${county}, ${state}`) updates.address = recordData.address;
+                  if (recordData.servicesOffered && (!existing.servicesOffered || existing.servicesOffered === pType)) updates.servicesOffered = recordData.servicesOffered;
+                  if (recordData.dataConfidence > existing.dataConfidence) updates.dataConfidence = recordData.dataConfidence;
+                  if (recordData.needsVerification !== existing.needsVerification) updates.needsVerification = recordData.needsVerification;
+                  updates.dateAccessed = recordData.dateAccessed;
+                  updates.notes = recordData.notes;
+
+                  if (Object.keys(updates).length > 1) {
+                    await updateCompetitor(existing.id, updates);
+                    updatedRecords++;
+                  }
+                } else {
+                  await createCompetitor(recordData);
+                  newRecords++;
+                }
               } catch (e) {
                 flagged++;
                 errorLog += `Failed to save ${r.name}: ${e instanceof Error ? e.message : e}\n`;
@@ -367,7 +394,7 @@ export const DataCollectionPanel = () => {
           status: finalStatus,
           totalProvidersScanned: totalScanned,
           newRecordsCreated: newRecords,
-          recordsUpdated: 0,
+          recordsUpdated: updatedRecords,
           recordsFlagged: flagged,
           errorLog: errorLog || undefined,
         });
@@ -404,7 +431,7 @@ export const DataCollectionPanel = () => {
         setRunningId(null);
       }
     },
-    [countyRecords, update, createCompetitor, createSourceLog, scanProviders],
+    [countyRecords, update, createCompetitor, updateCompetitor, createSourceLog, scanProviders, existingCompetitors],
   );
 
   // ─── Start a pending run from the history table ──────────────────────
