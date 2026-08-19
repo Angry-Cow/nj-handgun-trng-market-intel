@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { escapeHtml } from "@/lib/sanitize";
 
 type Competitor = {
   id: string;
@@ -254,7 +255,7 @@ export const MapContainer = ({ competitors, filteredIds, selectedId, onSelect }:
           // Tooltip showing facility names
           const names = cluster.items
             .slice(0, 5)
-            .map((p) => p.comp.facilityName)
+            .map((p) => escapeHtml(p.comp.facilityName))
             .join("<br>");
           const more = cluster.items.length > 5 ? `<br><em>+${cluster.items.length - 5} more</em>` : "";
           clusterMarker.bindTooltip(
@@ -317,17 +318,17 @@ export const MapContainer = ({ competitors, filteredIds, selectedId, onSelect }:
 
     const priceLines: string[] = [];
     if (c.ccwPrepPrice != null)
-      priceLines.push(`<span style="color:#2563eb;font-weight:700">CCW: $${c.ccwPrepPrice}</span>`);
+      priceLines.push(`<span style="color:#2563eb;font-weight:700">CCW: ${escapeHtml(c.ccwPrepPrice)}</span>`);
     if (c.basicHandgunPrice != null)
-      priceLines.push(`Basic: $${c.basicHandgunPrice}`);
+      priceLines.push(`Basic: ${escapeHtml(c.basicHandgunPrice)}`);
     if (c.laneFee != null)
-      priceLines.push(`Lane: $${c.laneFee}/hr`);
+      priceLines.push(`Lane: ${escapeHtml(c.laneFee)}/hr`);
 
     marker.bindPopup(
       L.popup({ offset: [0, -8], maxWidth: 220 }).setContent(
         `<div style="font-family:sans-serif;font-size:12px;line-height:1.5">
-          <div style="font-weight:800;font-size:13px;margin-bottom:2px;color:#1e293b">${c.facilityName}</div>
-          <div style="color:#64748b;margin-bottom:4px">${c.county} &middot; ${c.facilityType}</div>
+          <div style="font-weight:800;font-size:13px;margin-bottom:2px;color:#1e293b">${escapeHtml(c.facilityName)}</div>
+          <div style="color:#64748b;margin-bottom:4px">${escapeHtml(c.county)} &middot; ${escapeHtml(c.facilityType)}</div>
           ${priceLines.length ? `<div>${priceLines.join(" &nbsp;·&nbsp; ")}</div>` : ""}
           ${c.needsVerification ? `<div style="margin-top:6px;color:#b45309;font-size:10px">⚠ Needs verification</div>` : ""}
         </div>`

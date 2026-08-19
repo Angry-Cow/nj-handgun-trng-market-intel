@@ -221,7 +221,8 @@ export const AddCompetitorModal = ({ onClose, onCreate, onUpdate, editData, isMu
       }
       onClose();
     } catch (err: any) {
-      setSubmitError(err?.message ?? `Failed to ${isEditMode ? "update" : "create"} competitor. Please try again.`);
+      console.error("Competitor save failed", err);
+      setSubmitError(`Failed to ${isEditMode ? "update" : "create"} competitor. Please try again.`);
     }
   };
 

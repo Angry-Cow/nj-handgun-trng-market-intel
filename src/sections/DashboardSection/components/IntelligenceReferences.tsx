@@ -51,8 +51,8 @@ export const IntelligenceReferences = () => {
       setAddState("New Jersey");
       setAddError("");
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to add county.";
-      setAddError(msg);
+      console.error("County create failed", err);
+      setAddError("Failed to add county. Please try again.");
     }
   };
 
@@ -85,8 +85,8 @@ export const IntelligenceReferences = () => {
       setEditState("New Jersey");
       setEditError("");
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to save changes.";
-      setEditError(msg);
+      console.error("County update failed", err);
+      setEditError("Failed to save changes. Please try again.");
     }
   };
 

@@ -1,5 +1,6 @@
 import React from "react";
 import { useQuery } from "@/lib/useQuery";
+import { escapeHtml } from "@/lib/sanitize";
 
 function downloadMarkdown(filename: string, content: string) {
   const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
@@ -16,12 +17,12 @@ function downloadMarkdown(filename: string, content: string) {
 function handlePrint(title: string, content: string) {
   const win = window.open("", "_blank");
   if (!win) return;
-  win.document.write(`<!DOCTYPE html><html><head><title>${title}</title><style>
+  win.document.write(`<!DOCTYPE html><html><head><title>${escapeHtml(title)}</title><style>
     body { font-family: Georgia, serif; max-width: 800px; margin: 40px auto; padding: 0 20px; line-height: 1.7; color: #111; }
     h1, h2, h3 { color: #1a1a2e; } pre { background: #f4f4f4; padding: 12px; border-radius: 4px; overflow: auto; }
     code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; }
     @media print { body { margin: 20px; } }
-  </style></head><body><pre style="white-space:pre-wrap;font-family:Georgia,serif;">${content.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre></body></html>`);
+  </style></head><body><pre style="white-space:pre-wrap;font-family:Georgia,serif;">${escapeHtml(content)}</pre></body></html>`);
   win.document.close();
   win.focus();
   win.print();

@@ -7,6 +7,76 @@ const corsHeaders = {
 const FIRECRAWL_API_KEY = Deno.env.get("FIRECRAWL_API_KEY") ?? "";
 const FIRECRAWL_BASE = "https://api.firecrawl.dev/v2";
 
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+
+// Outbound calls get a hard timeout so a slow upstream cannot hang the request.
+const UPSTREAM_TIMEOUT_MS = 25_000;
+// Upper bound on paid scrape calls per request, so one request cannot fan out
+// into unbounded spend against FIRECRAWL_API_KEY.
+const MAX_SCRAPES_PER_REQUEST = 12;
+// Upper bound on sequential geocoding lookups per request.
+const MAX_GEOCODES_PER_REQUEST = 15;
+
+const ALLOWED_PROVIDER_TYPES = new Set([
+  "range",
+  "private instructor",
+  "gun club",
+  "retailer",
+]);
+
+// Place names only ever contain letters, spaces and a few punctuation marks.
+// Anything else is rejected before it can reach the Overpass query language.
+const PLACE_NAME_RE = /^[A-Za-z][A-Za-z .'-]{1,59}$/;
+
+// ─── Simple in-memory per-IP rate limit ───────────────────────────────
+const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const rateBuckets = new Map<string, number[]>();
+
+function rateLimited(ip: string): boolean {
+  const now = Date.now();
+  const hits = (rateBuckets.get(ip) ?? []).filter(
+    (t) => now - t < RATE_LIMIT_WINDOW_MS,
+  );
+  if (hits.length >= RATE_LIMIT_MAX) {
+    rateBuckets.set(ip, hits);
+    return true;
+  }
+  hits.push(now);
+  rateBuckets.set(ip, hits);
+  if (rateBuckets.size > 5000) {
+    for (const [k, v] of rateBuckets) {
+      if (v.every((t) => now - t >= RATE_LIMIT_WINDOW_MS)) rateBuckets.delete(k);
+    }
+  }
+  return false;
+}
+
+// ─── Confirm county/state exist in the County reference table ─────────
+async function isKnownPlace(county: string, state: string): Promise<boolean> {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return false;
+  try {
+    const url =
+      `${SUPABASE_URL}/rest/v1/County?select=county&limit=1` +
+      `&county=eq.${encodeURIComponent(county)}` +
+      `&state=eq.${encodeURIComponent(state)}`;
+    const res = await fetch(url, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    });
+    if (!res.ok) return false;
+    const rows = await res.json();
+    return Array.isArray(rows) && rows.length > 0;
+  } catch (e) {
+    console.error("County lookup failed:", e);
+    return false;
+  }
+}
+
 const STATE_ABBR: Record<string, string> = {
   Alabama: "AL", Alaska: "AK", Arizona: "AZ", Arkansas: "AR",
   California: "CA", Colorado: "CO", Connecticut: "CT", Delaware: "DE",
@@ -120,11 +190,14 @@ async function firecrawlSearch(
         limit: 15,
         scrapeOptions: { formats: ["markdown"] },
       }),
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
 
     if (!res.ok) {
+      // Log the upstream body server-side only; never return it to the caller.
       const body = await res.text().catch(() => "");
-      return { results: [], error: `Firecrawl ${res.status}: ${body}` };
+      console.error(`Firecrawl search failed (${res.status}):`, body);
+      return { results: [], error: "search_unavailable" };
     }
 
     const json = await res.json();
@@ -154,7 +227,8 @@ async function firecrawlSearch(
 
     return { results, error: null };
   } catch (e) {
-    return { results: [], error: `Firecrawl exception: ${e instanceof Error ? e.message : String(e)}` };
+    console.error("Firecrawl search exception:", e);
+    return { results: [], error: "search_unavailable" };
   }
 }
 
@@ -187,6 +261,7 @@ async function firecrawlScrape(
         formats: ["markdown", "html"],
         onlyMainContent: false,
       }),
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
 
     if (!res.ok) {
@@ -323,6 +398,7 @@ async function geocodeNominatim(
         headers: {
           "User-Agent": "FirearmsIntelDashboard/1.0",
         },
+        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
       },
     );
 
@@ -390,6 +466,12 @@ async function searchOverpass(
   const filters = tagFilters[providerType];
   if (!filters) return { results: [], error: null };
 
+  // Defence in depth: never interpolate a place name into Overpass QL unless it
+  // matches the strict place-name shape. The handler validates too.
+  if (!PLACE_NAME_RE.test(county) || !PLACE_NAME_RE.test(state)) {
+    return { results: [], error: null };
+  }
+
   const tagUnion = filters.map((f) => `${f}(area.searchArea)`).join(";");
 
   // County-level query with longer timeout
@@ -406,9 +488,11 @@ out center tags;
   try {
     const res = await fetch(overpassUrl, {
       headers: { "User-Agent": "FirearmsIntelDashboard/1.0" },
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
     if (!res.ok) {
-      return { results: [], error: `Overpass ${res.status}` };
+      console.error(`Overpass failed (${res.status})`);
+      return { results: [], error: "map_data_unavailable" };
     }
     const json = await res.json();
     const elements: Record<string, unknown>[] = json?.elements ?? [];
@@ -449,7 +533,8 @@ out center tags;
 
     return { results, error: null };
   } catch (e) {
-    return { results: [], error: `Overpass exception: ${e instanceof Error ? e.message : String(e)}` };
+    console.error("Overpass exception:", e);
+    return { results: [], error: "map_data_unavailable" };
   }
 }
 
@@ -530,18 +615,63 @@ Deno.serve(async (req: Request) => {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
+  const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
+
   try {
-    const {
-      county,
-      state,
-      providerType,
-    }: { county: string; state: string; providerType: string } =
-      await req.json();
+    // ── Rate limit per client IP ──
+    const ip =
+      req.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
+      req.headers.get("cf-connecting-ip") ||
+      "unknown";
+    if (rateLimited(ip)) {
+      return new Response(
+        JSON.stringify({ error: "Too many requests. Please try again shortly." }),
+        { status: 429, headers: jsonHeaders },
+      );
+    }
+
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid request." }), {
+        status: 400,
+        headers: jsonHeaders,
+      });
+    }
+
+    const raw = (body ?? {}) as Record<string, unknown>;
+    const county = typeof raw.county === "string" ? raw.county.trim() : "";
+    const state = typeof raw.state === "string" ? raw.state.trim() : "";
+    const providerType =
+      typeof raw.providerType === "string" ? raw.providerType.trim() : "";
 
     if (!county || !state || !providerType) {
       return new Response(
         JSON.stringify({ error: "Missing county, state, or providerType" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        { status: 400, headers: jsonHeaders },
+      );
+    }
+
+    // ── Validate provider type against the known set ──
+    if (!ALLOWED_PROVIDER_TYPES.has(providerType)) {
+      return new Response(
+        JSON.stringify({ error: "Unsupported provider type." }),
+        { status: 400, headers: jsonHeaders },
+      );
+    }
+
+    // ── Validate place names by shape, then against the County reference table ──
+    if (!PLACE_NAME_RE.test(county) || !PLACE_NAME_RE.test(state)) {
+      return new Response(
+        JSON.stringify({ error: "Unrecognized county or state." }),
+        { status: 400, headers: jsonHeaders },
+      );
+    }
+    if (!(await isKnownPlace(county, state))) {
+      return new Response(
+        JSON.stringify({ error: "Unrecognized county or state." }),
+        { status: 400, headers: jsonHeaders },
       );
     }
 
@@ -576,6 +706,7 @@ Deno.serve(async (req: Request) => {
     // Scrape each Firecrawl-sourced result to verify website and extract data
     const scrapePromises = merged
       .filter((r) => r.website && r.sourceName.includes("Firecrawl"))
+      .slice(0, MAX_SCRAPES_PER_REQUEST)
       .map(async (r) => {
         const scraped = await firecrawlScrape(r.website, r.name);
         if (scraped.phone) r.phone = r.phone || scraped.phone;
@@ -597,7 +728,9 @@ Deno.serve(async (req: Request) => {
     await Promise.all(scrapePromises);
 
     // Geocode any results still missing coordinates using Nominatim (sequentially to respect rate limits)
-    const needsGeo = merged.filter((r) => r.lat === 0 && r.lon === 0 && r.name);
+    const needsGeo = merged
+      .filter((r) => r.lat === 0 && r.lon === 0 && r.name)
+      .slice(0, MAX_GEOCODES_PER_REQUEST);
     for (const r of needsGeo) {
       if (r.lat !== 0) continue; // might have been set by scrape
       const geo = await geocodeNominatim(r.name, county, state);
@@ -623,12 +756,14 @@ Deno.serve(async (req: Request) => {
         sources: "Firecrawl + OpenStreetMap",
         debug: debugErrors.length > 0 ? debugErrors.join("; ") : undefined,
       }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      { status: 200, headers: jsonHeaders },
     );
   } catch (err) {
+    // Log the detail server-side; return a generic message to the caller.
+    console.error("firecrawl-scan failed:", err);
     return new Response(
-      JSON.stringify({ error: err instanceof Error ? err.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      JSON.stringify({ error: "Scan failed. Please try again." }),
+      { status: 500, headers: jsonHeaders },
     );
   }
 });

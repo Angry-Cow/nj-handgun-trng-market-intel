@@ -205,8 +205,8 @@ export const DataCollectionPanel = () => {
         await executeRun(runId, config.counties, config.types);
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to queue run.";
-      setLaunchError(msg);
+      console.error("Run launch failed", err);
+      setLaunchError("Failed to queue run. Please try again.");
     }
   };
 
@@ -963,7 +963,7 @@ export const DataCollectionPanel = () => {
               />
             </svg>
             <span className="text-sm font-medium">
-              Failed to load run history: {error.message}
+              Could not load run history. Please refresh and try again.
             </span>
           </div>
         )}

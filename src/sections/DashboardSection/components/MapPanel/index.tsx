@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useQuery } from "@/lib/useQuery";
+import { safeUrl } from "@/lib/sanitize";
 import { MapContainer } from "@/sections/DashboardSection/components/MapPanel/MapContainer";
 import { MapLegend } from "@/sections/DashboardSection/components/MapPanel/MapLegend";
 
@@ -93,7 +94,7 @@ export const MapPanel = ({ countyFilter, typeFilter, externalSelectedId, onExter
               <div className="flex gap-2"><span className="text-gray-400 w-24 shrink-0">County</span><span className="font-semibold">{selected.county}</span></div>
               <div className="flex gap-2"><span className="text-gray-400 w-24 shrink-0">Address</span><span className="font-semibold">{selected.address}</span></div>
               {selected.phone && <div className="flex gap-2"><span className="text-gray-400 w-24 shrink-0">Phone</span><a href={`tel:${selected.phone}`} className="font-semibold text-blue-600">{selected.phone}</a></div>}
-              {selected.website && <div className="flex gap-2"><span className="text-gray-400 w-24 shrink-0">Website</span><a href={selected.website} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-600 truncate">{selected.website.replace("https://", "")}</a></div>}
+              {selected.website && safeUrl(selected.website) && <div className="flex gap-2"><span className="text-gray-400 w-24 shrink-0">Website</span><a href={safeUrl(selected.website)} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-600 truncate">{selected.website.replace("https://", "")}</a></div>}
               {selected.ccwPrepPrice != null && <div className="flex gap-2"><span className="text-gray-400 w-24 shrink-0">CCW Price</span><span className="font-bold text-blue-600">${selected.ccwPrepPrice}</span></div>}
               {selected.basicHandgunPrice != null && <div className="flex gap-2"><span className="text-gray-400 w-24 shrink-0">Basic Course</span><span className="font-bold">${selected.basicHandgunPrice}</span></div>}
               {selected.laneFee != null && <div className="flex gap-2"><span className="text-gray-400 w-24 shrink-0">Lane Fee</span><span className="font-bold">${selected.laneFee}/hr</span></div>}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useMutation } from "@/lib/useMutation";
 import { useQuery } from "@/lib/useQuery";
+import { safeUrl } from "@/lib/sanitize";
 
 type Competitor = {
   id: string;
@@ -193,7 +194,8 @@ export const ProviderDetailPanel = ({ competitor, onClose, onFlyTo }: Props) => 
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err: any) {
-      setSaveError(err?.message ?? "Failed to save. Please try again.");
+      console.error("Provider save failed", err);
+      setSaveError("Failed to save. Please try again.");
     }
   };
 
@@ -205,11 +207,13 @@ export const ProviderDetailPanel = ({ competitor, onClose, onFlyTo }: Props) => 
   // Read-only row
   const Row = ({ label, value, href, mono }: { label: string; value?: string | number | null; href?: string; mono?: boolean }) => {
     if (value == null || value === "") return null;
+    // Stored links are untrusted: only render an anchor for safe URL schemes.
+    const linkHref = safeUrl(href);
     return (
       <div className="flex gap-3 py-2 border-b border-gray-50 last:border-0">
         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider w-28 shrink-0 pt-0.5">{label}</span>
-        {href ? (
-          <a href={href} target="_blank" rel="noopener noreferrer" className={`text-sm font-semibold text-blue-600 hover:underline truncate ${mono ? "font-mono" : ""}`}>{String(value)}</a>
+        {linkHref ? (
+          <a href={linkHref} target="_blank" rel="noopener noreferrer" className={`text-sm font-semibold text-blue-600 hover:underline truncate ${mono ? "font-mono" : ""}`}>{String(value)}</a>
         ) : (
           <span className={`text-sm font-semibold text-gray-800 ${mono ? "font-mono" : ""}`}>{String(value)}</span>
         )}

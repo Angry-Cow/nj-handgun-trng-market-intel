@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useQuery } from "@/lib/useQuery";
 import { useMutation } from "@/lib/useMutation";
+import { safeUrl } from "@/lib/sanitize";
 import { TableFilters } from "@/sections/DashboardSection/components/CompetitorTable/TableFilters";
 import { AddCompetitorModal } from "@/sections/DashboardSection/components/CompetitorTable/AddCompetitorModal";
 
@@ -156,7 +157,10 @@ export const CompetitorTable = ({ countyFilter, typeFilter, priceFilter, onRowCl
     </button>
   );
 
-  if (error) return <div className="text-red-500 p-8">Error loading competitor data: {error.message}</div>;
+  if (error) {
+    console.error("Competitor load failed", error);
+    return <div className="text-red-500 p-8">Could not load competitor data. Please refresh and try again.</div>;
+  }
 
   return (
     <section className="box-border caret-transparent mb-24">
@@ -269,8 +273,8 @@ export const CompetitorTable = ({ countyFilter, typeFilter, priceFilter, onRowCl
                           <button onClick={() => openEditModal(c)} title="Edit record" className="text-blue-600 bg-blue-50 hover:bg-blue-100 caret-transparent block min-h-[auto] min-w-[auto] text-center p-2 rounded-lg transition-colors">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                           </button>
-                          {c.website && (
-                            <a href={c.website} target="_blank" rel="noopener noreferrer" title="Visit website" className="text-gray-500 bg-gray-50 hover:bg-gray-100 block p-2 rounded-lg transition-colors">
+                          {safeUrl(c.website) && (
+                            <a href={safeUrl(c.website)} target="_blank" rel="noopener noreferrer" title="Visit website" className="text-gray-500 bg-gray-50 hover:bg-gray-100 block p-2 rounded-lg transition-colors">
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                             </a>
                           )}
