@@ -19,6 +19,13 @@ You MUST maintain this file to track your work across messages. This is NON-NEGO
 
 <changelog>
 
+## 2026-08-19 (phase1-cross-state-geocoding)
+- `supabase/functions/firecrawl-scan/index.ts` — added `STATE_BOUNDING_BOX` map (NJ + PA entries)
+- `geocodeNominatim()` now uses per-state viewbox instead of hardcoded NJ; unknown states skip filter
+- Display-name text check now uses `STATE_ABBR` dynamically instead of hardcoded "new jersey"/", nj"
+- `searchOverpass()` now uses `["ISO3166-2"="US-NJ"]` as primary state selector, name match as fallback
+- Verified: Bucks County PA "retailer" scan returns 21 results, 7 with valid PA coordinates (was 0 before)
+
 ## 2026-06-18 (tactical-course-directory)
 - Added `searchTacticalCourseDirectory()` to `DataCollectionPanel.tsx` as Source 2
 - Queries `https://www.tacticalcoursedirectory.com/search?state=&q=` via `proxiedFetch` (corsproxy.io → allorigins fallback)
@@ -45,7 +52,6 @@ You MUST maintain this file to track your work across messages. This is NON-NEGO
 - Clearing states also clears counties; "Select All" for counties scoped to currently visible (filtered) set
 - Preview summary now shows States, Counties, Types, and year window
 
-## 2026-04-05 (data-acquisition)
 ## 2026-04-05 (data-acquisition)
 - Created `DataCollectionPanel.tsx` — full Data Acquisition & Scraping section wired to `DataCollectionRun` entity
 - Configure run: multi-select counties (15 NJ counties), provider types, year range (start/end), trigger source
@@ -87,7 +93,6 @@ You MUST maintain this file to track your work across messages. This is NON-NEGO
 - Added `setAddError("")` / `setEditError("")` before the async call to clear stale errors on retry
 
 ## 2026-04-05 (intelligence-references-v2)
-## 2026-04-05 (intelligence-references-v2)
 - `IntelligenceReferences.tsx` — each card now shows county name + state subtitle
 - Add form: county name input + 52-option state dropdown (50 states + DC + Puerto Rico); defaults to New Jersey
 - Edit mode: expands card vertically with county input + state dropdown + Save/Cancel buttons
@@ -106,7 +111,7 @@ You MUST maintain this file to track your work across messages. This is NON-NEGO
 - Clicking any table row opens the panel; "fly to" button triggers map fly-to via `externalSelectedId` prop on `MapPanel`
 - Edit mode renders form inputs in-place per section (Contact, Pricing, Facility, Data Quality, Notes); saves via `useMutation("Competitor").update`
 - `DashboardSection/index.tsx` lifts `selectedProviderId` + `mapFlyToId` state; panel closes via backdrop or ✕
-- Actions column in table uses `e.stopPropagation()` so edit/delete buttons don&#39;t trigger the row-click panel open
+- Actions column in table uses `e.stopPropagation()` so edit/delete buttons don't trigger the row-click panel open
 
 ## 2026-04-05 (geocoding)
 - Added Nominatim OSM geocoding to `AddCompetitorModal.tsx` — fires on address `onBlur` and on "Next" click
@@ -115,64 +120,59 @@ You MUST maintain this file to track your work across messages. This is NON-NEGO
 - On submit, resolved coords are written to `latitude`/`longitude`; fallback to existing coords; last resort 0,0
 - Edit mode: only re-geocodes if address changed or existing coords are 0/missing
 
-## 2026-04-05 (latest)
+## 2026-04-05 (leaflet-migration)
 - Replaced MapLibre GL with Leaflet + OpenStreetMap raster tiles in `MapContainer.tsx`
 - Removed `maplibre-gl` dep; added `leaflet` + `@types/leaflet` to `package.json`
 - Leaflet uses standard raster tiles — no WebGL, no vector tile workers, no refresh blank-map issues
 - All marker features preserved: color by type, dim/active filter state, popups, fly-to, fit-bounds, needsVerification badge
-- MapLegend z-index uses `z-[1000]` (Leaflet&#39;s layer stack) to stay on top
+- MapLegend z-index uses `z-[1000]` (Leaflet's layer stack) to stay on top
 
-## 2026-04-05
+## 2026-04-05 (edit-mode-modal)
 - Edit button on competitor rows now opens `AddCompetitorModal` in edit mode (pre-populated with all fields)
 - `AddCompetitorModal` gains `editData` + `onUpdate` props; detects edit vs. create mode via `isEditMode` flag
-- Removed inline row editing state (`editingId`, `editForm`, `startEdit`, `saveEdit`) from `CompetitorTable/index.tsx`
+- Removed inline row editing state from `CompetitorTable/index.tsx`
 - Modal title changes to "Edit Competitor" and submit button shows "Save Changes" in edit mode
 - Latitude/longitude preserved from original record on update
 
-## 2026-04-05 (prev)
+## 2026-04-05 (map-filter-sync)
 - Synced map dots with FilterBar: active dots stay colored, filtered-out dots go gray+30% opacity
 - `MapContainer.tsx` accepts new `filteredIds: Set<string> | null` prop; new `applyMarkerState()` helper
 - `MapPanel/index.tsx` computes `filteredIds` from county+type filters, passes to MapContainer
 - Map auto-fits to filtered subset on filter change; badge shows "X of Y shown"
 - Clicking dimmed markers is blocked; selection clears if selected item leaves filter scope
 
-## 2026-04-05 (prev)
-- Added NJ state outline polygon to `MapContainer.tsx` — ~60 vertices traced from NJ DEP/USGS boundary, projected via `toSVG()`
+## 2026-04-05 (nj-outline)
+- Added NJ state outline polygon to `MapContainer.tsx` — ~60 vertices traced from NJ DEP/USGS boundary
 - Polygon sits below grid lines, county labels, and dots; styled with `#e8eef7` fill + `#9aaec8` stroke
-- Removed `__ANIMA_DBG__ toSVG` console log (no longer needed)
-- Fixed `MapContainer.tsx` SVG dot placement — viewBox `0 0 312 600`, cosine correction at mid-lat ~40.15°
-- All 11 county labels positioned at geographic centroids; `nj-outline` TODO completed
+- Fixed SVG dot placement — viewBox `0 0 312 600`, cosine correction at mid-lat ~40.15°
+- All 11 county labels positioned at geographic centroids
 
-## 2026-04-05
-
+## 2026-04-05 (charts-verified)
 - Verified `EnrollmentChart` + `PricingChart` — both use `useQuery` from SDK, zero static arrays
 - `EnrollmentChart` queries `MarketForecast` (county: Statewide, orderBy: year asc) — 6 DB records confirmed
 - `PricingChart` queries `Competitor` and derives tier pcts + avg from live `ccwPrepPrice` fields
 - DB confirmed: MarketForecast has all 6 statewide years (12,400→20,600 enrollments, $2.28M→$3.79M revenue)
-- `charts-live-data` TODO removed — fully verified
 
-## 2026-04-05
+## 2026-04-05 (methodology-report)
 - Wired `MethodologySection.tsx` Report Download + Print buttons to live `ResearchReport` DB query
 - `useQuery("ResearchReport", { orderBy: { reportDate: "desc" }, limit: 1 })` fetches most recent report
-- Preview panel now renders real `contentMarkdown` as `<pre>` with scroll; shows spinner while loading
+- Preview panel renders real `contentMarkdown` as `<pre>` with scroll; shows spinner while loading
 - `downloadMarkdown()` creates a Blob + `<a>` click — downloads `.md` file with sanitized filename
 - `handlePrint()` opens new window with formatted HTML, calls `window.print()`; buttons disabled when no data
 
-## 2026-04-04
+## 2026-04-04 (source-log-panel)
 - Built `SourceLogPanel.tsx` — audit trail table with status badges (Success/Failed/Pending), records count, last scraped date
 - Panel shows summary pills (counts per status + total records) in the header
 - Wired into `DashboardSection/index.tsx` between `CompetitorTable` and `MethodologySection`
 - Queries `SourceLog` via `useQuery("SourceLog", { orderBy: { lastScrapeDate: "desc" } })`
-- Handles isPending / error / empty states gracefully
 
-## 2026-04-04
+## 2026-04-04 (add-competitor-modal)
 - Added `AddCompetitorModal.tsx` — 2-step modal form (Basic Info → Pricing & Details) wired to `useMutation("Competitor").create`
 - Added "+ Add Competitor" button to `TableFilters.tsx` via new `onAddNew` prop
 - Modal validates required fields (facilityName, address, phone) before advancing steps
 - All 21 NJ counties and all 4 facility types available as dropdowns
-- `index.tsx` imports modal, passes `create` + `isMutating` down
 
-## 2026-04-04
+## 2026-04-04 (seed-data)
 - Added `REPORT_SEED_DATA` (full 6-section markdown report) to `src/data/seedData.ts`
 - Added `SOURCE_LOG_SEED_DATA` (15 audit trail entries) to `src/data/seedData.ts`
 - Added `ResearchReportDraft` and `SourceLogDraft` types to `src/data/types.ts`
