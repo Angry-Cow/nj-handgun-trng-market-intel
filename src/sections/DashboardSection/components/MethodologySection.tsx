@@ -1,6 +1,9 @@
-import React from "react";
-import { BookOpen, MapPinned, Tag, ClipboardList, FileDown, Printer } from "lucide-react";
-import { useQuery } from "@/lib/useQuery";
+import React, { useState, useCallback } from "react";
+import {
+  BookOpen, MapPinned, Tag, ClipboardList, FileDown, Printer,
+  Sparkles, ChevronDown, ChevronUp, AlertCircle, CheckCircle2,
+} from "lucide-react";
+import { useQuery, emitRefresh } from "@/lib/useQuery";
 import { escapeHtml } from "@/lib/sanitize";
 
 function downloadMarkdown(filename: string, content: string) {
@@ -29,25 +32,85 @@ function handlePrint(title: string, content: string) {
   win.print();
 }
 
-export const MethodologySection = () => {
-  const { data: reports, isPending: reportsPending } = useQuery("ResearchReport", {
-    orderBy: { reportDate: "desc" },
-    limit: 1,
+function fmtDate(d: Date | string) {
+  return new Date(d).toLocaleDateString("en-US", {
+    month: "long", day: "numeric", year: "numeric",
   });
+}
 
-  const report = reports?.[0] ?? null;
-  const reportTitle = report?.title ?? "Market Research Report: Firearms Training";
-  const reportContent = report?.contentMarkdown ?? "";
-  const reportDate = report?.reportDate
-    ? new Date(report.reportDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
-    : "February 7, 2026";
-  const summary = report?.executiveSummary ?? "Demand for firearms safety and handgun training in New Jersey&#39;s selected counties remained meaningful after the post‑2020 sales surge...";
+function extractChangeLine(content: string): string {
+  const match = content.match(/## Changes Since Previous Report\s*\n([\s\S]*?)(?=\n##|\n$|$)/);
+  if (!match) return "";
+  const section = match[1].trim();
+  const lines = section.split("\n").filter((l) => l.startsWith("- "));
+  if (lines.length > 0) return lines.join(" · ").replace(/^- /g, "");
+  const firstPara = section.split("\n\n")[0].replace(/^_+|_+$/g, "").trim();
+  return firstPara;
+}
+
+export const MethodologySection = () => {
+  const { data: reports, isPending: reportsPending, refetch } = useQuery(
+    "ResearchReport",
+    { orderBy: { reportDate: "desc" }, limit: 5 },
+  );
+
+  const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState("");
+  const [genResult, setGenResult] = useState<{
+    title: string;
+    summary: string;
+    changes: { newProviders: number; removedProviders: number; priceChanges: number };
+    providerCount: number;
+  } | null>(null);
+  const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
+
+  const handleGenerate = useCallback(async () => {
+    setGenerating(true);
+    setGenError("");
+    setGenResult(null);
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const res = await fetch(`${supabaseUrl}/functions/v1/generate-report`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${anonKey}`,
+        },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => "");
+        throw new Error(`Generation failed (${res.status}): ${errBody}`);
+      }
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      setGenResult({
+        title: data.title,
+        summary: data.executiveSummary,
+        changes: data.changes,
+        providerCount: data.providerCount,
+      });
+      refetch();
+      emitRefresh("ResearchReport");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setGenError(msg);
+    } finally {
+      setGenerating(false);
+    }
+  }, [refetch]);
+
+  const reportList = reports ?? [];
+  const latestReport = reportList[0] ?? null;
 
   return (
     <section className="relative text-white bg-gray-900 shadow-[rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0.4)_0px_40px_100px_-20px] box-border caret-transparent overflow-hidden p-16 rounded-[48px]">
       <div className="absolute bg-blue-600/20 box-border caret-transparent blur-[120px] h-[500px] w-[500px] -mr-64 -mt-64 rounded-full right-0 top-0"></div>
       <div className="absolute bg-amber-500/10 box-border caret-transparent blur-[100px] h-[300px] w-[300px] -ml-32 -mb-32 rounded-full left-0 bottom-0"></div>
       <div className="relative box-border caret-transparent z-10">
+        {/* Header */}
         <div className="items-center box-border caret-transparent flex mb-12">
           <div className="items-center bg-blue-600 shadow-[rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0)_0px_0px_0px_0px,rgba(11,99,255,0.4)_0px_25px_50px_-12px] box-border caret-transparent flex h-16 justify-center min-h-[auto] min-w-[auto] w-16 mr-6 rounded-2xl">
             <BookOpen className="h-8 w-8" />
@@ -61,7 +124,9 @@ export const MethodologySection = () => {
             </p>
           </div>
         </div>
+
         <div className="box-border caret-transparent gap-x-20 grid grid-cols-[repeat(1,minmax(0px,1fr))] gap-y-20 md:grid-cols-[repeat(2,minmax(0px,1fr))]">
+          {/* Left column: research summary + data quality */}
           <div className="box-border caret-transparent min-h-[auto] min-w-[auto]">
             <div className="box-border caret-transparent">
               <h4 className="text-blue-600 text-xs font-black box-border caret-transparent tracking-[3.6px] leading-4 uppercase mb-6">
@@ -111,63 +176,160 @@ export const MethodologySection = () => {
               </ul>
             </div>
           </div>
+
+          {/* Right column: report generation + history */}
           <div className="bg-white/10 shadow-[rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0.05)_0px_2px_4px_0px_inset] box-border caret-transparent flex flex-col h-full min-h-[auto] min-w-[auto] border p-10 rounded-[40px] border-solid border-white/10">
-            <div className="items-center box-border caret-transparent flex justify-between min-h-[auto] min-w-[auto] mb-8">
+            <div className="items-center box-border caret-transparent flex justify-between min-h-[auto] min-w-[auto] mb-6">
               <h4 className="text-2xl font-bold items-center box-border caret-transparent flex leading-8 min-h-[auto] min-w-[auto]">
                 <FileDown className="text-blue-600 h-6 w-6 mr-3" />
-                Full Report
+                Reports
               </h4>
-            <span className="text-gray-500 text-[10px] font-black box-border caret-transparent block tracking-[1px] leading-[15px] min-h-[auto] min-w-[auto] uppercase">
-                Markdown Format
+              <span className="text-gray-500 text-[10px] font-black box-border caret-transparent block tracking-[1px] leading-[15px] min-h-[auto] min-w-[auto] uppercase">
+                {reportList.length} of 5 most recent
               </span>
             </div>
 
-            {/* Report preview panel */}
-            <div className="bg-gray-900/50 box-border caret-transparent basis-[0%] grow max-h-[400px] min-h-[auto] min-w-[auto] border overflow-auto mb-8 p-6 rounded-2xl border-solid border-white/10">
-              {reportsPending ? (
-                <div className="flex items-center gap-3 text-gray-400 py-8 justify-center">
-                  <svg className="animate-spin h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                  </svg>
-                  <span className="text-sm">Loading report…</span>
+            {/* Generate button + result */}
+            <div className="mb-6">
+              <button
+                onClick={handleGenerate}
+                disabled={generating}
+                className="w-full flex items-center justify-center gap-2 text-sm font-bold bg-blue-600 text-white px-6 py-3.5 rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {generating ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                    </svg>
+                    Generating report…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" />
+                    Generate New Report
+                  </>
+                )}
+              </button>
+
+              {genError && (
+                <div className="flex items-start gap-2 mt-3 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>{genError}</span>
                 </div>
-              ) : reportContent ? (
-                <pre className="whitespace-pre-wrap font-mono text-xs text-gray-300 leading-relaxed">{reportContent}</pre>
-              ) : (
-                <div className="box-border caret-transparent">
-                  <h1 className="text-xl font-bold box-border caret-transparent leading-7 mb-4">{reportTitle}</h1>
-                  <p className="text-gray-400 box-border caret-transparent mb-4">Date: {reportDate}</p>
-                  <h2 className="text-lg font-bold box-border caret-transparent leading-7 mb-2">Executive Summary</h2>
-                  <p className="text-gray-400 box-border caret-transparent mb-4">{summary}</p>
-                  <p className="text-gray-500 text-xs italic box-border caret-transparent leading-4 mt-8">
-                    No report content found in database.
-                  </p>
+              )}
+
+              {genResult && (
+                <div className="flex items-start gap-2 mt-3 text-xs text-green-400 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-3">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold mb-1">Report generated successfully</p>
+                    <p className="text-gray-300">{genResult.summary}</p>
+                    <p className="text-gray-400 mt-1">
+                      Changes: {genResult.changes.newProviders} new providers, {genResult.changes.priceChanges} price changes
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
 
-            <div className="box-border caret-transparent gap-x-4 flex flex-col min-h-[auto] min-w-[auto] gap-y-4 md:flex-row">
-              <button
-                disabled={!reportContent || reportsPending}
-                onClick={() => downloadMarkdown(
-                  `${reportTitle.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.md`,
-                  reportContent
-                )}
-                className="text-gray-900 text-xs font-black items-center bg-white shadow-[rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0)_0px_0px_0px_0px,rgba(255,255,255,0.1)_0px_25px_50px_-12px] caret-transparent gap-x-2 flex basis-[0%] grow justify-center tracking-[1.2px] leading-4 min-h-[auto] min-w-[auto] gap-y-2 text-center uppercase px-0 py-5 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
-              >
-                <FileDown className="h-4 w-4" />
-                Download (MD)
-              </button>
-              <button
-                disabled={!reportContent || reportsPending}
-                onClick={() => handlePrint(reportTitle, reportContent)}
-                className="text-xs font-black items-center bg-blue-600 shadow-[rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0)_0px_0px_0px_0px,rgba(11,99,255,0.2)_0px_25px_50px_-12px] caret-transparent gap-x-2 flex basis-[0%] grow justify-center tracking-[1.2px] leading-4 min-h-[auto] min-w-[auto] gap-y-2 text-center uppercase px-0 py-5 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
-              >
-                <Printer className="h-4 w-4" />
-                Print Report
-              </button>
-            </div>
+            {/* Report history list */}
+            {reportsPending ? (
+              <div className="flex items-center gap-3 text-gray-400 py-8 justify-center">
+                <svg className="animate-spin h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+                <span className="text-sm">Loading reports…</span>
+              </div>
+            ) : reportList.length === 0 ? (
+              <div className="text-center py-8 text-gray-500 text-sm">
+                No reports found. Generate one to get started.
+              </div>
+            ) : (
+              <div className="space-y-3 flex-1 overflow-auto max-h-[500px]">
+                {reportList.map((report: any, idx: number) => {
+                  const isExpanded = expandedReportId === report.id;
+                  const isLatest = idx === 0;
+                  const changeLine = extractChangeLine(report.contentMarkdown ?? "");
+                  const reportContent = report.contentMarkdown ?? "";
+                  const reportTitle = report.title ?? "Untitled Report";
+
+                  return (
+                    <div
+                      key={report.id}
+                      className={`bg-gray-900/50 border rounded-2xl overflow-hidden transition-all ${
+                        isLatest
+                          ? "border-blue-500/30"
+                          : "border-white/10"
+                      }`}
+                    >
+                      {/* Report header row */}
+                      <button
+                        onClick={() => setExpandedReportId(isExpanded ? null : report.id)}
+                        className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/5 transition-colors text-left"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            {isLatest && (
+                              <span className="text-[9px] font-black bg-blue-600 text-white px-1.5 py-0.5 rounded-full uppercase tracking-wider">
+                                Latest
+                              </span>
+                            )}
+                            <span className="text-sm font-bold text-gray-200 truncate">
+                              {reportTitle}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            {fmtDate(report.reportDate)}
+                          </p>
+                          {changeLine && (
+                            <p className="text-[11px] text-gray-400 mt-1 truncate">
+                              {changeLine}
+                            </p>
+                          )}
+                        </div>
+                        {isExpanded ? (
+                          <ChevronUp className="h-4 w-4 text-gray-400 shrink-0 ml-2" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 text-gray-400 shrink-0 ml-2" />
+                        )}
+                      </button>
+
+                      {/* Expanded content */}
+                      {isExpanded && (
+                        <div className="border-t border-white/10 px-5 py-4">
+                          <div className="bg-gray-900/70 border border-white/5 rounded-xl p-4 mb-4 max-h-[300px] overflow-auto">
+                            <pre className="whitespace-pre-wrap font-mono text-xs text-gray-300 leading-relaxed">
+                              {reportContent}
+                            </pre>
+                          </div>
+                          <div className="flex gap-3">
+                            <button
+                              onClick={() => downloadMarkdown(
+                                `${reportTitle.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.md`,
+                                reportContent,
+                              )}
+                              className="flex items-center gap-2 text-xs font-bold text-gray-900 bg-white px-4 py-2.5 rounded-lg hover:bg-gray-200 transition-colors"
+                            >
+                              <FileDown className="h-3.5 w-3.5" />
+                              Download (MD)
+                            </button>
+                            <button
+                              onClick={() => handlePrint(reportTitle, reportContent)}
+                              className="flex items-center gap-2 text-xs font-bold text-white bg-blue-600 px-4 py-2.5 rounded-lg hover:bg-blue-700 transition-colors"
+                            >
+                              <Printer className="h-3.5 w-3.5" />
+                              Print
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>
