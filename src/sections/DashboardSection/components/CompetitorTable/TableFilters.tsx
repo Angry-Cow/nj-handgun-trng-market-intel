@@ -1,3 +1,5 @@
+import { Download } from "lucide-react";
+
 type TableFiltersProps = {
   search: string;
   onSearchChange: (v: string) => void;
@@ -34,11 +36,7 @@ export const TableFilters = ({ search, onSearchChange, onExportCSV, onAddNew, to
             onClick={onExportCSV}
             className="text-sm font-bold items-center bg-white shadow-[rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0.05)_0px_1px_2px_0px] caret-transparent flex leading-5 min-h-[auto] min-w-[auto] text-center border border-gray-200 px-6 py-3 rounded-xl hover:border-blue-400 transition-colors"
           >
-            <img
-              src="https://c.animaapp.com/mn5696zt0wUcrM/assets/icon-14.svg"
-              alt="Icon"
-              className="text-blue-600 box-border caret-transparent h-4 w-4 mr-2"
-            />
+            <Download className="text-blue-600 h-4 w-4 mr-2" />
             Export CSV
           </button>
           <button

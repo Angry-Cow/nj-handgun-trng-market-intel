@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { ShieldCheck, ShieldAlert, ShieldX } from "lucide-react";
 import { useQuery } from "@/lib/useQuery";
 import { useMutation } from "@/lib/useMutation";
 import { safeUrl } from "@/lib/sanitize";
@@ -15,9 +16,9 @@ type Props = {
 type SortField = "facilityName" | "county" | "ccwPrepPrice" | "dataConfidence";
 
 const getConfidenceMeta = (score: number) => {
-  if (score >= 95) return { label: "high", colorClass: "text-green-600 bg-green-600/10", icon: "https://c.animaapp.com/mn5696zt0wUcrM/assets/icon-17.svg" };
-  if (score >= 92) return { label: "medium", colorClass: "text-amber-500 bg-amber-500/10", icon: "https://c.animaapp.com/mn5696zt0wUcrM/assets/icon-19.svg" };
-  return { label: "low", colorClass: "text-red-500 bg-red-500/10", icon: "https://c.animaapp.com/mn5696zt0wUcrM/assets/icon-19.svg" };
+  if (score >= 95) return { label: "high", colorClass: "text-green-600 bg-green-600/10", Icon: ShieldCheck };
+  if (score >= 92) return { label: "medium", colorClass: "text-amber-500 bg-amber-500/10", Icon: ShieldAlert };
+  return { label: "low", colorClass: "text-red-500 bg-red-500/10", Icon: ShieldX };
 };
 
 export const CompetitorTable = ({ countyFilter, typeFilter, priceFilter, onRowClick }: Props) => {
@@ -264,7 +265,7 @@ export const CompetitorTable = ({ countyFilter, typeFilter, priceFilter, onRowCl
                       </td>
                       <td className="box-border caret-transparent align-middle px-8 py-5">
                         <span className={`text-[10px] font-black items-center ${conf.colorClass} box-border caret-transparent flex tracking-[1px] leading-[15px] uppercase w-fit px-3 py-1 rounded-full`}>
-                          <img src={conf.icon} alt="Icon" className="box-border caret-transparent h-3 w-3 mr-1" />
+                          <conf.Icon className="h-3 w-3 mr-1" />
                           {conf.label}
                         </span>
                       </td>

@@ -1,4 +1,5 @@
 import { useQuery } from "@/lib/useQuery";
+import { ChartBar as BarChart3 } from "lucide-react";
 
 const STATEWIDE_YEARS = [2023, 2024, 2025, 2026, 2027, 2028];
 
@@ -35,7 +36,7 @@ export const EnrollmentChart = () => {
       <div className="items-center box-border caret-transparent flex justify-between mb-8">
         <div className="box-border caret-transparent min-h-[auto] min-w-[auto]">
           <h3 className="text-2xl font-bold items-center box-border caret-transparent gap-x-2 flex leading-8 gap-y-2">
-            <img src="https://c.animaapp.com/mn5696zt0wUcrM/assets/icon-11.svg" alt="Icon" className="text-blue-600 box-border caret-transparent h-6 w-6" />
+            <BarChart3 className="text-blue-600 h-6 w-6" />
             Enrollment Forecast
           </h3>
           <p className="text-gray-500 text-sm font-medium box-border caret-transparent leading-5">

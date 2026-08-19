@@ -1,3 +1,5 @@
+import { ArrowRight, FileText } from "lucide-react";
+
 export const HeroContent = () => {
   return (
     <div className="relative box-border caret-transparent max-w-none min-h-[auto] min-w-[auto] w-full z-20 mx-auto px-6 md:max-w-screen-xl">
@@ -26,18 +28,10 @@ export const HeroContent = () => {
         <div className="box-border caret-transparent gap-x-4 flex flex-wrap gap-y-4">
           <button className="text-white font-bold items-center bg-blue-600 shadow-[rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0)_0px_0px_0px_0px,rgba(11,99,255,0.4)_0px_25px_50px_-12px] caret-transparent flex min-h-[auto] min-w-[auto] text-center px-10 py-5 rounded-2xl">
             Open Dashboard{" "}
-            <img
-              src="https://c.animaapp.com/mn5696zt0wUcrM/assets/icon-3.svg"
-              alt="Icon"
-              className="box-border caret-transparent h-5 w-5 ml-2"
-            />
+            <ArrowRight className="h-5 w-5 ml-2" />
           </button>
           <button className="text-white font-bold items-center backdrop-blur-xl bg-white/10 caret-transparent flex min-h-[auto] min-w-[auto] text-center border px-10 py-5 rounded-2xl border-white/10">
-            <img
-              src="https://c.animaapp.com/mn5696zt0wUcrM/assets/icon-4.svg"
-              alt="Icon"
-              className="text-blue-600 box-border caret-transparent h-5 w-5 mr-2"
-            />
+            <FileText className="text-blue-600 h-5 w-5 mr-2" />
             Full Report (MD)
           </button>
         </div>

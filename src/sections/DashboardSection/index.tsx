@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Building2, BadgeCheck, DollarSign } from "lucide-react";
 import { useQuery } from "@/lib/useQuery";
 import { StatCard } from "@/sections/DashboardSection/components/StatCard";
 import { FilterBar } from "@/sections/DashboardSection/components/FilterBar";
@@ -43,21 +44,21 @@ export const DashboardSection = () => {
           title="Total Providers"
           value={isPending ? "..." : String(totalProviders)}
           footerText="Total Providers"
-          iconSrc="https://c.animaapp.com/mn5696zt0wUcrM/assets/icon-6.svg"
+          icon={Building2}
           accentColorClass="text-blue-600 bg-blue-600/10"
         />
         <StatCard
           title="Verified Sources"
           value={isPending ? "..." : `${highConfidencePct}%`}
           footerText="High Confidence"
-          iconSrc="https://c.animaapp.com/mn5696zt0wUcrM/assets/icon-7.svg"
+          icon={BadgeCheck}
           accentColorClass="text-amber-500 bg-amber-500/10"
         />
         <StatCard
           title="Avg CCW Price"
           value={isPending ? "..." : `$${avgCcwPrice}`}
           footerText="Weighted Avg"
-          iconSrc="https://c.animaapp.com/mn5696zt0wUcrM/assets/icon-8.svg"
+          icon={DollarSign}
           accentColorClass="text-blue-600 bg-blue-600/10"
         />
       </div>

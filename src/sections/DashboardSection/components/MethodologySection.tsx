@@ -1,4 +1,5 @@
 import React from "react";
+import { BookOpen, MapPinned, Tag, ClipboardList, FileDown, Printer } from "lucide-react";
 import { useQuery } from "@/lib/useQuery";
 import { escapeHtml } from "@/lib/sanitize";
 
@@ -49,11 +50,7 @@ export const MethodologySection = () => {
       <div className="relative box-border caret-transparent z-10">
         <div className="items-center box-border caret-transparent flex mb-12">
           <div className="items-center bg-blue-600 shadow-[rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0)_0px_0px_0px_0px,rgba(11,99,255,0.4)_0px_25px_50px_-12px] box-border caret-transparent flex h-16 justify-center min-h-[auto] min-w-[auto] w-16 mr-6 rounded-2xl">
-            <img
-              src="https://c.animaapp.com/mn5696zt0wUcrM/assets/icon-20.svg"
-              alt="Icon"
-              className="box-border caret-transparent h-8 w-8"
-            />
+            <BookOpen className="h-8 w-8" />
           </div>
           <div className="box-border caret-transparent min-h-[auto] min-w-[auto]">
             <h2 className="text-4xl font-bold box-border caret-transparent tracking-[-0.9px] leading-10">
@@ -79,21 +76,13 @@ export const MethodologySection = () => {
               </p>
               <div className="box-border caret-transparent gap-x-6 grid grid-cols-[repeat(1,minmax(0px,1fr))] gap-y-6 md:grid-cols-[repeat(2,minmax(0px,1fr))]">
                 <div className="items-center bg-white/10 box-border caret-transparent flex min-h-[auto] min-w-[auto] border p-4 rounded-2xl border-solid border-white/10">
-                  <img
-                    src="https://c.animaapp.com/mn5696zt0wUcrM/assets/icon-21.svg"
-                    alt="Icon"
-                    className="text-green-600 box-border caret-transparent shrink-0 h-5 w-5 mr-4 mt-1"
-                  />
+                  <MapPinned className="text-green-600 shrink-0 h-5 w-5 mr-4 mt-1" />
                   <span className="text-gray-300 text-sm font-medium box-border caret-transparent block leading-5 min-h-[auto] min-w-[auto]">
                     Verified lat/long accuracy within 25 meters.
                   </span>
                 </div>
                 <div className="items-center bg-white/10 box-border caret-transparent flex min-h-[auto] min-w-[auto] border p-4 rounded-2xl border-solid border-white/10">
-                  <img
-                    src="https://c.animaapp.com/mn5696zt0wUcrM/assets/icon-22.svg"
-                    alt="Icon"
-                    className="text-green-600 box-border caret-transparent shrink-0 h-5 w-5 mr-4 mt-1"
-                  />
+                  <Tag className="text-green-600 shrink-0 h-5 w-5 mr-4 mt-1" />
                   <span className="text-gray-300 text-sm font-medium box-border caret-transparent block leading-5 min-h-[auto] min-w-[auto]">
                     Pricing benchmarks updated Feb 7, 2026.
                   </span>
@@ -102,11 +91,7 @@ export const MethodologySection = () => {
             </div>
             <div className="backdrop-blur-sm bg-white/10 box-border caret-transparent border mt-10 p-8 rounded-[32px] border-solid border-white/10">
               <h4 className="text-2xl font-bold items-center box-border caret-transparent flex leading-8 mb-6">
-                <img
-                  src="https://c.animaapp.com/mn5696zt0wUcrM/assets/icon-23.svg"
-                  alt="Icon"
-                  className="text-blue-600 box-border caret-transparent h-6 w-6 mr-3"
-                />
+                <ClipboardList className="text-blue-600 h-6 w-6 mr-3" />
                 Data Quality Standards
               </h4>
               <ul className="text-gray-400 text-sm box-border caret-transparent leading-5 list-none pl-0">
@@ -129,11 +114,7 @@ export const MethodologySection = () => {
           <div className="bg-white/10 shadow-[rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0.05)_0px_2px_4px_0px_inset] box-border caret-transparent flex flex-col h-full min-h-[auto] min-w-[auto] border p-10 rounded-[40px] border-solid border-white/10">
             <div className="items-center box-border caret-transparent flex justify-between min-h-[auto] min-w-[auto] mb-8">
               <h4 className="text-2xl font-bold items-center box-border caret-transparent flex leading-8 min-h-[auto] min-w-[auto]">
-                <img
-                  src="https://c.animaapp.com/mn5696zt0wUcrM/assets/icon-24.svg"
-                  alt="Icon"
-                  className="text-blue-600 box-border caret-transparent h-6 w-6 mr-3"
-                />
+                <FileDown className="text-blue-600 h-6 w-6 mr-3" />
                 Full Report
               </h4>
             <span className="text-gray-500 text-[10px] font-black box-border caret-transparent block tracking-[1px] leading-[15px] min-h-[auto] min-w-[auto] uppercase">
@@ -175,11 +156,7 @@ export const MethodologySection = () => {
                 )}
                 className="text-gray-900 text-xs font-black items-center bg-white shadow-[rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0)_0px_0px_0px_0px,rgba(255,255,255,0.1)_0px_25px_50px_-12px] caret-transparent gap-x-2 flex basis-[0%] grow justify-center tracking-[1.2px] leading-4 min-h-[auto] min-w-[auto] gap-y-2 text-center uppercase px-0 py-5 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
               >
-                <img
-                  src="https://c.animaapp.com/mn5696zt0wUcrM/assets/icon-25.svg"
-                  alt="Icon"
-                  className="box-border caret-transparent h-4 w-4"
-                />
+                <FileDown className="h-4 w-4" />
                 Download (MD)
               </button>
               <button
@@ -187,11 +164,7 @@ export const MethodologySection = () => {
                 onClick={() => handlePrint(reportTitle, reportContent)}
                 className="text-xs font-black items-center bg-blue-600 shadow-[rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0)_0px_0px_0px_0px,rgba(11,99,255,0.2)_0px_25px_50px_-12px] caret-transparent gap-x-2 flex basis-[0%] grow justify-center tracking-[1.2px] leading-4 min-h-[auto] min-w-[auto] gap-y-2 text-center uppercase px-0 py-5 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
               >
-                <img
-                  src="https://c.animaapp.com/mn5696zt0wUcrM/assets/icon-26.svg"
-                  alt="Icon"
-                  className="box-border caret-transparent h-4 w-4"
-                />
+                <Printer className="h-4 w-4" />
                 Print Report
               </button>
             </div>

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import ReactDOM from "react-dom";
+import { SlidersHorizontal } from "lucide-react";
 import { useQuery } from "@/lib/useQuery";
 
 type FilterBarProps = {
@@ -150,11 +151,7 @@ export const FilterBar = ({ countyFilter, typeFilter, priceFilter, onCountyChang
     <>
       <div className="sticky top-4 items-center backdrop-blur-2xl bg-white/90 shadow-[rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0.25)_0px_25px_50px_-12px] box-border caret-transparent gap-x-6 flex flex-wrap gap-y-6 z-[60] border border-gray-200 p-5 rounded-3xl border-solid w-full">
         <div className="text-blue-600 font-bold items-center box-border caret-transparent flex min-h-[auto] min-w-[auto] mr-4">
-          <img
-            src="https://c.animaapp.com/mn5696zt0wUcrM/assets/icon-9.svg"
-            alt="Icon"
-            className="box-border caret-transparent h-5 w-5 mr-2"
-          />
+          <SlidersHorizontal className="h-5 w-5 mr-2" />
           <span className="box-border caret-transparent hidden min-h-0 min-w-0 md:block md:min-h-[auto] md:min-w-[auto]">
             Intelligence Filters
           </span>

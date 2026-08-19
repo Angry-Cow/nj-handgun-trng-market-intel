@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { MapPin } from "lucide-react";
 import { useQuery } from "@/lib/useQuery";
 import { safeUrl } from "@/lib/sanitize";
 import { MapContainer } from "@/sections/DashboardSection/components/MapPanel/MapContainer";
@@ -111,7 +112,7 @@ export const MapPanel = ({ countyFilter, typeFilter, externalSelectedId, onExter
           <div className="items-center box-border caret-transparent flex basis-[0%] grow justify-center min-h-[auto] min-w-[auto] text-center p-16">
             <div className="box-border caret-transparent min-h-[auto] min-w-[auto]">
               <div className="items-center bg-gray-50 box-border caret-transparent flex h-24 justify-center w-24 mb-8 mx-auto rounded-full">
-                <img src="https://c.animaapp.com/mn5696zt0wUcrM/assets/icon-10.svg" alt="Icon" className="text-gray-200 box-border caret-transparent h-12 w-12" />
+                <MapPin className="text-gray-200 h-12 w-12" />
               </div>
               <h4 className="text-2xl font-bold box-border caret-transparent leading-8 mb-4">Select a Provider</h4>
               <p className="text-gray-500 box-border caret-transparent leading-[26px]">

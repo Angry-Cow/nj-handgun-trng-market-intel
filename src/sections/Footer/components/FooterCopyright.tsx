@@ -1,3 +1,5 @@
+import { ExternalLink } from "lucide-react";
+
 export const FooterCopyright = () => {
   return (
     <div className="items-center box-border caret-transparent gap-x-6 flex flex-col justify-between gap-y-6 border-gray-100 pt-10 border-t border-solid md:flex-row">
@@ -13,11 +15,7 @@ export const FooterCopyright = () => {
           className="text-blue-600 items-center box-border caret-transparent flex min-h-[auto] min-w-[auto]"
         >
           Heyboss.ai{" "}
-          <img
-            src="https://c.animaapp.com/mn5696zt0wUcrM/assets/icon-28.svg"
-            alt="Icon"
-            className="box-border caret-transparent h-3 w-3 ml-1"
-          />
+          <ExternalLink className="h-3 w-3 ml-1" />
         </a>
       </div>
     </div>

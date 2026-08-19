@@ -1,4 +1,5 @@
 import { useQuery } from "@/lib/useQuery";
+import { Tag, DollarSign } from "lucide-react";
 
 export const PricingChart = () => {
   const { data: competitors, isPending } = useQuery("Competitor");
@@ -16,7 +17,7 @@ export const PricingChart = () => {
       <div className="items-center box-border caret-transparent flex justify-between mb-8">
         <div className="box-border caret-transparent min-h-[auto] min-w-[auto]">
           <h3 className="text-2xl font-bold items-center box-border caret-transparent gap-x-2 flex leading-8 gap-y-2">
-            <img src="https://c.animaapp.com/mn5696zt0wUcrM/assets/icon-12.svg" alt="Icon" className="text-amber-500 box-border caret-transparent h-6 w-6" />
+            <Tag className="text-amber-500 h-6 w-6" />
             Pricing Distribution
           </h3>
           <p className="text-gray-500 text-sm font-medium box-border caret-transparent leading-5">
@@ -46,7 +47,7 @@ export const PricingChart = () => {
           ))}
         </div>
         <div className="items-center bg-blue-600/10 box-border caret-transparent flex flex-col justify-center min-h-[auto] min-w-[auto] text-center border border-blue-600/10 p-8 rounded-[32px] border-solid">
-          <img src="https://c.animaapp.com/mn5696zt0wUcrM/assets/icon-13.svg" alt="Icon" className="text-blue-600 box-border caret-transparent h-12 w-12 mb-4" />
+          <DollarSign className="text-blue-600 h-12 w-12 mb-4" />
           <h4 className="text-blue-600 text-4xl font-black box-border caret-transparent leading-10 min-h-[auto] min-w-[auto] mb-2">
             {isPending ? "..." : `$${avg}`}
           </h4>

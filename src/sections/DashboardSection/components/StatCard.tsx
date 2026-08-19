@@ -1,8 +1,10 @@
+import { TrendingUp, type LucideIcon } from "lucide-react";
+
 export type StatCardProps = {
   title: string;
   value: string;
   footerText: string;
-  iconSrc: string;
+  icon: LucideIcon;
   accentColorClass: string;
 };
 
@@ -17,22 +19,14 @@ export const StatCard = (props: StatCardProps) => {
           {props.value}
         </h3>
         <div className="text-green-600 text-xs font-bold items-center box-border caret-transparent flex leading-4 mt-2">
-          <img
-            src="https://c.animaapp.com/mn5696zt0wUcrM/assets/icon-5.svg"
-            alt="Icon"
-            className="box-border caret-transparent h-3 w-3 mr-1"
-          />
+          <TrendingUp className="h-3 w-3 mr-1" />
           {props.footerText}
         </div>
       </div>
       <div
         className={`${props.accentColorClass} box-border caret-transparent min-h-[auto] min-w-[auto] p-4 rounded-xl`}
       >
-        <img
-          src={props.iconSrc}
-          alt="Icon"
-          className="box-border caret-transparent h-6 w-6"
-        />
+        <props.icon className="h-6 w-6" />
       </div>
     </div>
   );
