@@ -93,6 +93,12 @@ const STATE_ABBR: Record<string, string> = {
   Wisconsin: "WI", Wyoming: "WY", "District of Columbia": "DC", "Puerto Rico": "PR",
 };
 
+// Bounding boxes for Nominatim viewbox filtering: [west, north, east, south]
+const STATE_BOUNDING_BOX: Record<string, [number, number, number, number]> = {
+  "New Jersey": [-75.6, 41.4, -73.9, 38.9],
+  Pennsylvania: [-80.5, 42.3, -74.7, 39.7],
+};
+
 const REDDIT_DOMAINS = ["reddit.com", "www.reddit.com", "old.reddit.com"];
 const JUNK_DOMAINS = [
   "reddit.com", "www.reddit.com", "old.reddit.com",
@@ -391,9 +397,14 @@ async function geocodeNominatim(
   // Include state in the query to avoid geocoding to wrong states
   const query = `${businessName} ${stateAbbr}`;
 
+  const bbox = STATE_BOUNDING_BOX[state];
+  const viewboxParam = bbox
+    ? `&viewbox=${bbox[0]},${bbox[1]},${bbox[2]},${bbox[3]}&bounded=1`
+    : "";
+
   try {
     const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=1&countrycodes=us&viewbox=-75.6,41.4,-73.9,38.9&bounded=1`,
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=1&countrycodes=us${viewboxParam}`,
       {
         headers: {
           "User-Agent": "FirearmsIntelDashboard/1.0",
@@ -410,15 +421,20 @@ async function geocodeNominatim(
     const lat = parseFloat(result.lat);
     const lon = parseFloat(result.lon);
 
-    // Reject results outside NJ bounding box (avoids geocoding to wrong states)
-    if (lat < 38.9 || lat > 41.4 || lon < -75.6 || lon > -73.9) {
-      return null;
+    // If we have a bounding box for this state, reject results outside it
+    if (bbox) {
+      if (lat < bbox[3] || lat > bbox[1] || lon < bbox[0] || lon > bbox[2]) {
+        return null;
+      }
     }
 
-    // Also reject if the display name doesn't contain "New Jersey" or "NJ"
-    const display = (result.display_name ?? "").toLowerCase();
-    if (!display.includes("new jersey") && !display.includes(", nj")) {
-      return null;
+    // If we know the state abbreviation, verify the display name references it
+    if (stateAbbr !== state) {
+      const display = (result.display_name ?? "").toLowerCase();
+      const stateLower = state.toLowerCase();
+      if (!display.includes(stateLower) && !display.includes(`, ${stateAbbr.toLowerCase()}`)) {
+        return null;
+      }
     }
 
     return {
@@ -474,28 +490,47 @@ async function searchOverpass(
 
   const tagUnion = filters.map((f) => `${f}(area.searchArea)`).join(";");
 
-  // County-level query with longer timeout
-  const overpassQuery = `
+  const stateAbbr = STATE_ABBR[state];
+  const isoCode = stateAbbr ? `US-${stateAbbr}` : "";
+
+  const buildOverpassQuery = (stateAreaClause: string): string => `
 [out:json][timeout:90];
-area["name"="${state}"]["admin_level"="4"]->.stateArea;
+${stateAreaClause}
 area["name"="${county} County"]["admin_level"~"5|6"](area.stateArea)->.searchArea;
 (${tagUnion};);
 out center tags;
 `.trim();
 
-  const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`;
-
-  try {
+  const fetchOverpassElements = async (
+    stateAreaClause: string,
+  ): Promise<Record<string, unknown>[]> => {
+    const query = buildOverpassQuery(stateAreaClause);
+    const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
     const res = await fetch(overpassUrl, {
       headers: { "User-Agent": "FirearmsIntelDashboard/1.0" },
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
     if (!res.ok) {
       console.error(`Overpass failed (${res.status})`);
-      return { results: [], error: "map_data_unavailable" };
+      throw new Error("map_data_unavailable");
     }
     const json = await res.json();
-    const elements: Record<string, unknown>[] = json?.elements ?? [];
+    return Array.isArray(json?.elements) ? json.elements : [];
+  };
+
+  try {
+    const isoStateAreaClause = isoCode
+      ? `area["ISO3166-2"="${isoCode}"]->.stateArea;`
+      : null;
+    const nameStateAreaClause = `area["name"="${state}"]["admin_level"="4"]->.stateArea;`;
+
+    let elements = isoStateAreaClause
+      ? await fetchOverpassElements(isoStateAreaClause)
+      : [];
+
+    if (elements.length === 0) {
+      elements = await fetchOverpassElements(nameStateAreaClause);
+    }
 
     const results = elements.map((el) => {
       const tags = (el.tags as Record<string, string>) ?? {};
