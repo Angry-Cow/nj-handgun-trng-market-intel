@@ -69,7 +69,7 @@ export const MapPanel = ({ countyFilter, typeFilter, externalSelectedId, onExter
 
   return (
     <div className="box-border caret-transparent gap-x-10 grid grid-cols-none gap-y-10 mb-20 md:grid-cols-[repeat(3,minmax(0px,1fr))]">
-      <div className="relative bg-white shadow-[rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0.25)_0px_25px_50px_-12px] box-border caret-transparent col-end-auto col-start-auto h-[700px] min-h-[auto] min-w-[auto] border border-gray-200 overflow-hidden rounded-[40px] border-solid md:col-end-[span_2] md:col-start-[span_2]">
+      <div className="relative z-10 bg-white shadow-[rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0.25)_0px_25px_50px_-12px] box-border caret-transparent col-end-auto col-start-auto h-[700px] min-h-[auto] min-w-[auto] border border-gray-200 overflow-hidden rounded-[40px] border-solid md:col-end-[span_2] md:col-start-[span_2]">
         <MapContainer
           competitors={allCompetitors}
           filteredIds={filteredIds}
