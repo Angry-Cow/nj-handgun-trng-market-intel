@@ -3,86 +3,112 @@
 > This file is written by the external model (Magica) and read by Bolt.
 > Bolt reads this at the start of each work session.
 
-## Active Plan — Phase 2: Build the missing "Generate Report" feature
+## Active Plan — Phase 3: Prior-year (3–4 year) historical data via the Wayback Machine
 
-_Context: The "Full Report (MD)" panel only ever displays the single, oldest `ResearchReport`
-row (inserted once by `DataSeeder.tsx` / `REPORT_SEED_DATA` on Feb 7, 2026). Nothing in the
-app has ever created a second `ResearchReport` row — the scraping pipeline only writes to
-`Competitor`, `CourseOffering`, `DataCollectionRun`, and `SourceLog`. This phase adds the
-actual report-generation feature, modeled after the existing `DataCollectionRun` history
-pattern: every generated report is a new row, never an overwrite, so there's a running
-history of reports over time._
+_Context: You asked to be able to pull prior-year pricing/context for providers already in
+the `Competitor` table, going back at most 3–4 years, using the Internet Archive's Wayback
+Machine — free, no API key, and it covers the actual historical pages of the specific
+businesses already tracked (more accurate than any general industry estimate for "what did
+this specific range charge two years ago")._
 
-### Section 1: Add a `generate-report` Supabase Edge Function
-**Prompt:** Add a new Supabase Edge Function, `generate-report`, that:
-- Accepts an optional request body with `county`, `state`, and `providerType` filters
-  (same filter shape as the existing `firecrawl-scan` function). If no filters are given,
-  it covers all current data.
-- Reads all current `Competitor` rows matching the filters, plus their related
-  `CourseOffering` rows.
-- Computes summary statistics: count of providers and course offerings per county and per
-  provider type; average/min/max price where price is known; percent of rows flagged
-  `needsVerification`; a data-confidence breakdown (what fraction of rows are high/medium/
-  low confidence).
-- Builds a Markdown document containing: a title, the report date, an executive summary
-  paragraph, a per-county breakdown table, a per-provider-type breakdown table, a data
-  quality / methodology footnote (pull source counts from `SourceLog`), and a "changes
-  since previous report" section that diffs against the most recent prior `ResearchReport`
-  row if one exists (new providers added, providers removed, notable price changes).
-- Inserts this as a **new row** in `ResearchReport` (never updates or deletes an existing
-  row) with `title`, `reportDate` (now), `contentMarkdown`, and `executiveSummary`
-  populated.
-- Returns the new report's id plus a short JSON summary of what changed, for the UI to
-  display immediately after generation.
+### Section 1: Add a `CompetitorHistory` table
+**Prompt:** Add a new table `CompetitorHistory` with columns: `id` (uuid pk),
+`competitorId` (uuid, references `Competitor.id` on delete cascade), `year` (integer),
+`courseType` (text, nullable — label for which offering this price applies to, e.g.
+"Basic Handgun", "CCW Prep"), `price` (numeric, nullable), `snapshotUrl` (text — the exact
+`https://web.archive.org/web/<timestamp>/<original-url>` used, required whenever a price
+or data point is recorded, since this is the citation), `dataConfidence` (integer),
+`notes` (text, nullable), `createdAt`/`updatedAt` timestamps. Enable RLS with the same
+read/write policy pattern as the other tables in this project.
 **Done when:**
-- [ ] `generate-report` edge function exists and is deployed
-- [ ] Calling it with no filters returns a markdown report covering all current data
-- [ ] Calling it with county/state/providerType filters scopes the report accordingly
-- [ ] A new `ResearchReport` row is inserted every time (verified by row count increasing)
-- [ ] The original Feb 7, 2026 seeded report is untouched and still the oldest row
+- [ ] `CompetitorHistory` table exists with the columns above
+- [ ] RLS enabled matching the existing table pattern
+- [ ] Foreign key to `Competitor` with cascade delete works correctly
 
-### Section 2: Add a "Generate Report" action to the dashboard
-**Prompt:** Add a "Generate Report" button next to the existing "Full Report (MD)" button
-in the Methodology section. Clicking it calls the `generate-report` function, shows a
-loading state while it runs, and on success shows an inline summary of what changed (e.g.
-"12 new providers added since last report, 3 price changes detected") before refreshing
-the Methodology section to show the newly generated report.
+### Section 2: Add a `wayback-history-scan` Supabase Edge Function
+**Prompt:** Add a new Supabase Edge Function, `wayback-history-scan`, that accepts a
+`competitorId` and a `years` array (e.g. `[2023, 2024, 2025]`, capped at 4 years) and, for
+each year:
+- Calls the Wayback Machine Availability API
+  (`https://archive.org/wayback/available?url=<competitor website>&timestamp=<Dec 31 of
+  that year>`) to find the closest snapshot to year-end of that year. If none is returned,
+  record nothing for that year rather than guessing.
+- Fetches the returned snapshot URL's content (the Wayback Machine serves it as normal
+  HTML, so reuse a plain `fetch` + HTML parse, or reuse the Firecrawl scrape pattern
+  already used in `firecrawl-scan/index.ts` if that's simpler — pick whichever approach
+  costs less per page and note which you chose and why in STATUS.md).
+- Reuses the existing phone/service/price extraction regex logic from
+  `firecrawl-scan/index.ts` against the archived page's content to pull a price if one is
+  present.
+- Inserts one `CompetitorHistory` row per year found, with `snapshotUrl` set to the exact
+  archived URL used.
+- Respects at least a 500ms delay between Wayback calls, and caps total years per request
+  at 4.
 **Done when:**
-- [ ] "Generate Report" button is visible and functional in the dashboard
-- [ ] Clicking it shows a loading state, then a success summary
-- [ ] The Methodology section immediately reflects the new report without a page reload
+- [ ] `wayback-history-scan` edge function exists and is deployed
+- [ ] Calling it for a real competitor with a real website returns historical rows where
+      snapshots exist, and cleanly returns nothing (not an error) for years with no
+      snapshot available
+- [ ] Every inserted row has a real, working `snapshotUrl`
+- [ ] No more than 4 years processed per request, with at least 500ms between Wayback calls
 
-### Section 3: Show report history, not just the latest report
-**Prompt:** Change `MethodologySection.tsx`'s report display to show the 5 most recent
-`ResearchReport` rows (ordered by `reportDate` descending), each with its date and a short
-"changes since previous report" line, and let me expand, download, or print any of them —
-not only the newest one.
+### Section 3: Add a "Backfill History" action to the Competitor detail panel
+**Prompt:** Add a "Backfill History" action to `ProviderDetailPanel.tsx` that lets me pick
+how many years back (1–4) and triggers `wayback-history-scan` for that one competitor,
+then shows the returned historical rows in a small year-over-year table with a clickable
+link to each snapshot.
 **Done when:**
-- [ ] Up to 5 most recent reports are listed, each with date and change summary
-- [ ] Each listed report can be individually downloaded (MD) and printed
-- [ ] The Feb 7, 2026 seeded report still appears in this history (oldest entry)
+- [ ] "Backfill History" control is visible in the Competitor detail panel
+- [ ] Triggering it for 1–4 years calls the edge function and displays results
+- [ ] Each historical row's snapshot link opens the actual archived page
 
-### Section 4: Verify with a real generation
-**Prompt:** After Sections 1-3 are complete, click "Generate Report" once from the live
-dashboard and report in STATUS.md: the new report's id, its executive summary, at least
-one number from its per-county breakdown table, and confirmation that the `ResearchReport`
-table now has more than one row.
+### Section 4: Include year-over-year pricing in generated reports
+**Prompt:** Update the `generate-report` function from Phase 2 to include a
+"Year-over-Year Pricing" section per county/provider type when `CompetitorHistory` rows
+exist for providers in scope, clearly stating how many providers had historical data
+available vs. how many did not (Wayback coverage of small local business sites is
+inconsistent — say so rather than implying full coverage).
 **Done when:**
-- [ ] A real report was generated from the live dashboard (not just the edge function
-      tested in isolation)
-- [ ] STATUS.md includes the new report's id and a sample of its actual content
-- [ ] `ResearchReport` table row count increased by exactly 1
+- [ ] Generated reports include a Year-over-Year Pricing section when historical data
+      exists in scope
+- [ ] The section states the count of providers with vs. without historical coverage
+- [ ] Reports generated with no historical data in scope simply omit this section (no
+      broken/empty table)
+
+### Section 5: Verify with a real backfill
+**Prompt:** After Sections 1-4 are complete, run a real "Backfill History" for one actual
+competitor with a real website (pick one with `needsVerification: false` and a working
+`website` field), 3 years back, from the live dashboard. Report in STATUS.md: which
+competitor was used, which years returned real snapshot data vs. none, the actual
+`snapshotUrl` values, and confirm the `CompetitorHistory` table row count increased
+accordingly.
+**Done when:**
+- [ ] A real backfill was run from the live dashboard for a real competitor
+- [ ] STATUS.md lists the actual years/snapshot URLs returned (or explicitly "no snapshot
+      found" per year where that's genuinely the case)
+- [ ] `CompetitorHistory` table row count increased to match
+
+Do not run this against every competitor automatically — it should only run when
+triggered for a specific provider or a specific batch I choose, since it makes outbound
+calls per year per provider.
 
 ---
 
 ## Completed Sections
 
+### Phase 2: Build the missing "Generate Report" feature — COMPLETE (Aug 19, 2026)
+Added the `generate-report` Supabase Edge Function (accepts county/state/providerType
+filters, computes per-county/per-type statistics, builds a full markdown report with a
+"Changes Since Previous Report" diff section, and inserts a new `ResearchReport` row every
+time — never overwrites). Added a "Generate New Report" button to the dashboard and
+rewrote the report display to show up to 5 most recent reports with expand/download/print.
+Verified independently: `ResearchReport` table row count increased from 2 to 3 after a
+real generation from the live dashboard; new report id `78965ba8-3a29-4348-b874-
+40c93dfb7996` covers 215 providers with a real computed executive summary and confidence
+breakdown (45 high, 79 medium, 91 low).
+
 ### Phase 1: Fix cross-state geocoding + Overpass state-matching bugs — COMPLETE (Aug 19, 2026)
 Fixed the NJ-only bounding box in `geocodeNominatim()` (replaced with a `STATE_BOUNDING_BOX`
-map supporting per-state boxes, with unmapped states skipping the filter instead of being
-silently rejected), and fixed `searchOverpass()` to try `ISO3166-2` matching first before
-falling back to name-based matching. Verified independently: a live Bucks County, PA scan
-(range + retailer) on Aug 19, 2026 3:37 PM created 18 new `Competitor` rows including 3
-with real Pennsylvania coordinates (Wicen's Shooting Range, Rifle & Shotgun Range, Ridge &
-Valley Rod & Gun Club), where previously all Bucks County rows had `latitude/longitude =
-0.000000`.
+map supporting per-state boxes) and `searchOverpass()` state-matching to use ISO 3166-2
+codes. Verified with a live Bucks County, PA scan that created 18 new `Competitor` rows
+including 3 with real Pennsylvania coordinates.
