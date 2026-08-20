@@ -11,6 +11,7 @@ import { SourceLogPanel } from "@/sections/DashboardSection/components/SourceLog
 import { ProviderDetailPanel } from "@/sections/DashboardSection/components/ProviderDetailPanel";
 import { IntelligenceReferences } from "@/sections/DashboardSection/components/IntelligenceReferences";
 import { DataCollectionPanel } from "@/sections/DashboardSection/components/DataCollectionPanel";
+import { IndustryIndicatorPanel } from "@/sections/DashboardSection/components/IndustryIndicatorPanel";
 
 export const DashboardSection = () => {
   const [countyFilter, setCountyFilter] = useState<string[]>([]);
@@ -87,6 +88,7 @@ export const DashboardSection = () => {
         onRowClick={(id) => setSelectedProviderId(id)}
       />
       <DataCollectionPanel />
+      <IndustryIndicatorPanel />
       <SourceLogPanel />
       <MethodologySection />
       <ProviderDetailPanel

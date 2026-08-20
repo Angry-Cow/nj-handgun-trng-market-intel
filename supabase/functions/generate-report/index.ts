@@ -138,6 +138,13 @@ async function fetchHistoryRows(
   return all;
 }
 
+async function fetchIndustryIndicators(): Promise<any[]> {
+  const data = await supabaseFetch(
+    "/rest/v1/IndustryIndicator?select=*&order=period.desc",
+  );
+  return Array.isArray(data) ? data : [];
+}
+
 async function fetchPreviousReport(): Promise<ResearchReport | null> {
   const data = await supabaseFetch(
     "/rest/v1/ResearchReport?select=id,title,reportDate,contentMarkdown,executiveSummary&order=reportDate.desc&limit=1",
@@ -212,6 +219,7 @@ function buildMarkdown(
   sourceLogCount: number,
   prevReport: ResearchReport | null,
   historyRows: any[],
+  indicators: any[],
 ): { markdown: string; summary: string; changes: ChangeSummary } {
   const now = new Date();
   const dateStr = now.toLocaleDateString("en-US", {
@@ -367,6 +375,41 @@ _Historical prices extracted from archived snapshots via the Internet Archive's 
 `;
   }
 
+  // Industry Outlook section from manually-entered indicators
+  let industrySection = "";
+  if (indicators.length > 0) {
+    // Group by indicator name, then sort by period descending
+    const byIndicator = new Map<string, any[]>();
+    for (const ind of indicators) {
+      const arr = byIndicator.get(ind.indicatorName) ?? [];
+      arr.push(ind);
+      byIndicator.set(ind.indicatorName, arr);
+    }
+
+    const indicatorRows = Array.from(byIndicator.entries())
+      .sort((a, b) => b[1].length - a[1].length)
+      .map(([name, rows]) => {
+        const latest = rows[0];
+        const valStr = latest.unit
+          ? `${Number(latest.indicatorValue).toLocaleString()} ${latest.unit}`
+          : Number(latest.indicatorValue).toLocaleString();
+        const sourceStr = latest.sourceName ?? "—";
+        const confStr = `${latest.dataConfidence ?? 90}%`;
+        return `| ${name} | ${latest.period} | ${valStr} | ${sourceStr} | ${confStr} |`;
+      }).join("\n");
+
+    industrySection = `## Industry Outlook
+
+The following market-level indicators provide context for the competitor data above. These are manually curated data points sourced from public records and industry reports.
+
+| Indicator | Period | Value | Source | Confidence |
+|-----------|--------|-------|--------|------------|
+${indicatorRows}
+
+_Industry indicators are entered manually by analysts and may cover permit applications, background check volumes, market-wide pricing trends, and other contextual metrics._
+`;
+  }
+
   // Filter description
   const filterDesc = [
     filters.county ? `County: ${filters.county}` : null,
@@ -417,7 +460,7 @@ ${typeRows || "| — | 0 | — | 0 |"}
 ${changesSection}
 
 ${historySection}
-## Methodology & Data Quality
+${industrySection}## Methodology & Data Quality
 
 Data is collected via automated web scraping (Firecrawl) and OpenStreetMap Overpass API queries. Each provider record is scored for confidence based on data completeness (coordinates, website, address, phone). Providers missing key data fields are flagged for manual verification.
 
@@ -477,10 +520,11 @@ Deno.serve(async (req: Request) => {
     if (providerType) filters.providerType = providerType;
 
     // Fetch all data
-    const [competitors, sourceLogCount, prevReport] = await Promise.all([
+    const [competitors, sourceLogCount, prevReport, indicators] = await Promise.all([
       fetchCompetitors(filters),
       fetchSourceLogCount(),
       fetchPreviousReport(),
+      fetchIndustryIndicators(),
     ]);
 
     const competitorIds = competitors.map((c) => c.id);
@@ -495,6 +539,7 @@ Deno.serve(async (req: Request) => {
       sourceLogCount,
       prevReport,
       historyRows,
+      indicators,
     );
 
     const now = new Date().toISOString();

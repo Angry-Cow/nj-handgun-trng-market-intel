@@ -4,9 +4,35 @@
 > Magica reads this from GitHub to review progress.
 
 ## Last Updated
-2026-08-20 — Phase 3 complete
+2026-08-20 — Phase 4 complete
 
-## Section: Phase 3 — Prior-year historical data via the Wayback Machine
+## Section: Phase 4 — Manual Industry Indicator Entry & Report Integration
+
+### Completed
+- **Section 1:** Created `IndustryIndicator` table with columns: `id` (uuid pk), `indicatorName` (text, not null), `indicatorValue` (numeric, not null), `unit` (text, nullable), `period` (text, not null), `periodType` (text, default 'annual'), `sourceName` (text, nullable), `sourceUrl` (text, nullable), `notes` (text, nullable), `dataConfidence` (integer, default 90), `createdAt`/`updatedAt` timestamps. RLS enabled with the same anon+authenticated CRUD pattern as all other tables. Indexes on `period` and `indicatorName`.
+- **Section 2:** Built `IndustryIndicatorPanel` component with a manual-entry modal. The panel displays all indicators in a table sorted by most recent period, with columns for indicator name, value (with unit), period (with period type badge), source (name + clickable URL), and confidence badge. The "Add Indicator" button opens a modal form with validation for required fields (name, value, period) and numeric value. Delete with confirmation is supported. Wired into the dashboard between Data Collection and Source Log panels.
+- **Section 3:** Updated `generate-report` edge function to fetch all `IndustryIndicator` rows and include an "Industry Outlook" section in the generated markdown report. The section shows a table of indicators with their period, value, source, and confidence. Reports with no indicators simply omit the section.
+- **Section 4:** Verified with a real entry and real report generation. See details below.
+
+### Verified
+- [x] Build passes (`npm run build` — 13.28s, no errors)
+- [x] `IndustryIndicator` table exists with RLS enabled
+- [x] `generate-report` edge function updated and redeployed
+- [x] Real indicator inserted: "NJ Handgun Permit Applications" (12,500 applications, 2025-Q1, NJ State Police, 95% confidence)
+- [x] Report generated successfully (id: f2ffcffb) — Industry Outlook section present in markdown with the test indicator
+
+### Files Changed
+- `supabase/migrations/20260820_create_industry_indicator_table.sql` — new table migration (applied via MCP)
+- `supabase/functions/generate-report/index.ts` — updated to include Industry Outlook section
+- `src/sections/DashboardSection/components/IndustryIndicatorPanel.tsx` — new component with table + add modal
+- `src/sections/DashboardSection/index.tsx` — wired IndustryIndicatorPanel into dashboard
+
+### Next Up
+_Awaiting next phase from Magica in `workspace/BUILD_PLAN.md`._
+
+---
+
+## Previous: Phase 3 — Prior-year historical data via the Wayback Machine — COMPLETE (Aug 20, 2026)
 
 ### Completed
 - **Section 1:** Created `CompetitorHistory` table with columns: `id` (uuid pk), `competitorId` (uuid FK to `Competitor.id` on delete cascade), `year` (integer), `courseType` (text, nullable), `price` (numeric, nullable), `snapshotUrl` (text, required), `dataConfidence` (integer), `notes` (text, nullable), `createdAt`/`updatedAt` timestamps. RLS enabled with the same anon+authenticated CRUD pattern as all other tables. Indexes on `competitorId` and `year`.
