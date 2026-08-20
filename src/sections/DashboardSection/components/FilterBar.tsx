@@ -149,7 +149,7 @@ export const FilterBar = ({ countyFilter, typeFilter, priceFilter, onCountyChang
 
   return (
     <>
-      <div className="sticky top-4 items-center backdrop-blur-2xl bg-white/90 shadow-[rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0.25)_0px_25px_50px_-12px] box-border caret-transparent gap-x-6 flex flex-wrap gap-y-6 z-[60] border border-gray-200 p-5 rounded-3xl border-solid w-full">
+      <div className="static md:sticky md:top-4 items-center backdrop-blur-2xl bg-white/90 shadow-[rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0.25)_0px_25px_50px_-12px] box-border caret-transparent gap-x-4 gap-y-3 md:gap-x-6 md:gap-y-6 flex flex-wrap z-[60] border border-gray-200 p-3 md:p-5 rounded-2xl md:rounded-3xl border-solid w-full">
         <div className="text-blue-600 font-bold items-center box-border caret-transparent flex min-h-[auto] min-w-[auto] mr-4">
           <SlidersHorizontal className="h-5 w-5 mr-2" />
           <span className="box-border caret-transparent hidden min-h-0 min-w-0 md:block md:min-h-[auto] md:min-w-[auto]">
@@ -164,7 +164,7 @@ export const FilterBar = ({ countyFilter, typeFilter, priceFilter, onCountyChang
               ref={buttonRef}
               type="button"
               onClick={() => countyOpen ? setCountyOpen(false) : openDropdown()}
-              className={`text-sm font-semibold bg-slate-50 caret-transparent flex items-center gap-2 leading-[normal] min-h-[auto] min-w-[auto] outline-offset-2 outline outline-2 px-4 py-3 rounded-xl transition-colors ${
+              className={`text-sm font-semibold bg-slate-50 caret-transparent flex items-center gap-2 leading-[normal] min-h-[auto] min-w-[auto] outline-offset-2 outline outline-2 px-3 py-2 md:px-4 md:py-3 rounded-xl transition-colors ${
                 countyFilter.length > 0
                   ? "outline-blue-500 text-blue-600"
                   : "outline-transparent border-gray-200"
@@ -191,7 +191,7 @@ export const FilterBar = ({ countyFilter, typeFilter, priceFilter, onCountyChang
           <select
             value={typeFilter}
             onChange={(e) => onTypeChange(e.target.value)}
-            className="text-sm font-semibold bg-slate-50 caret-transparent block leading-[normal] min-h-[auto] min-w-[auto] outline-transparent outline-offset-2 outline outline-2 border-gray-200 px-4 py-3 rounded-xl"
+            className="text-sm font-semibold bg-slate-50 caret-transparent block leading-[normal] min-h-[auto] min-w-[auto] outline-transparent outline-offset-2 outline outline-2 border-gray-200 px-3 py-2 md:px-4 md:py-3 rounded-xl"
           >
             <option value="">All Provider Types</option>
             {TYPES.map((t) => (
@@ -199,12 +199,12 @@ export const FilterBar = ({ countyFilter, typeFilter, priceFilter, onCountyChang
             ))}
           </select>
 
-          <div className="items-center bg-slate-50 box-border caret-transparent flex min-h-[auto] min-w-[auto] border border-gray-200 p-1 rounded-xl border-solid">
+          <div className="items-center bg-slate-50 box-border caret-transparent flex min-h-[auto] min-w-[auto] border border-gray-200 p-0.5 md:p-1 rounded-xl border-solid">
             {PRICES.map((p) => (
               <button
                 key={p.value}
                 onClick={() => onPriceChange(p.value)}
-                className={`text-xs font-bold caret-transparent block leading-4 min-h-[auto] min-w-[auto] text-center px-3 py-2 rounded-lg transition-colors ${
+                className={`text-xs font-bold caret-transparent block leading-4 min-h-[auto] min-w-[auto] text-center px-2 py-1.5 md:px-3 md:py-2 rounded-lg transition-colors ${
                   priceFilter === p.value
                     ? "text-white bg-blue-600 shadow-[rgba(0,0,0,0.1)_0px_10px_15px_-3px]"
                     : "text-gray-500 bg-transparent"
