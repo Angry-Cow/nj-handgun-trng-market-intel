@@ -131,9 +131,11 @@ export const DataCollectionPanel = () => {
 
   // Derive unique sorted states from county records
   const allStates = useMemo(() => {
-    if (!countyRecords) return [];
-    return Array.from(new Set(countyRecords.map((c) => c.state))).sort();
-  }, [countyRecords]);
+    const states = new Set<string>();
+    (countyRecords ?? []).forEach((c) => states.add(c.state));
+    (bboxRecords ?? []).forEach((b) => states.add(b.state));
+    return Array.from(states).sort();
+  }, [countyRecords, bboxRecords]);
 
   // Counties filtered by selected states (or all if no state selected)
   const filteredCounties = useMemo(() => {
