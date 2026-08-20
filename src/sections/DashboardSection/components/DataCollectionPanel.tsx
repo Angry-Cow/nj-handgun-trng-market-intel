@@ -242,6 +242,7 @@ export const DataCollectionPanel = () => {
     sourceName: string;
     confidence: number;
     needsVerification: boolean;
+    ageGateBlocked?: boolean;
   };
 
   // ─── Call edge function for server-side scraping ──────────────────────
@@ -376,7 +377,9 @@ export const DataCollectionPanel = () => {
                   needsVerification: r.needsVerification,
                   sourceUrl: r.sourceUrl,
                   dateAccessed: new Date(),
-                  notes: `Auto-collected via ${r.sourceName} — ${county}, ${state}`,
+                  notes: r.ageGateBlocked
+                    ? `Auto-collected via ${r.sourceName} — ${county}, ${state} — likely blocked by age gate`
+                    : `Auto-collected via ${r.sourceName} — ${county}, ${state}`,
                 };
 
                 if (existing) {

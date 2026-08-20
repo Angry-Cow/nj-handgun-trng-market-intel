@@ -3,7 +3,7 @@ import { useMutation } from "@/lib/useMutation";
 import { useQuery, emitRefresh } from "@/lib/useQuery";
 import { safeUrl } from "@/lib/sanitize";
 import { supabase } from "@/lib/supabase";
-import { History, ExternalLink, Loader2 } from "lucide-react";
+import { History, ExternalLink, Loader as Loader2 } from "lucide-react";
 
 type Competitor = {
   id: string;
@@ -298,6 +298,11 @@ export const ProviderDetailPanel = ({ competitor, onClose, onFlyTo }: Props) => 
                   {competitor.needsVerification && (
                     <span className="text-[10px] font-black text-amber-700 bg-amber-100 px-3 py-1 rounded-full uppercase tracking-wider border border-amber-200">
                       ⚠ Verify
+                    </span>
+                  )}
+                  {competitor.notes?.includes("age gate") && (
+                    <span className="text-[10px] font-black text-orange-700 bg-orange-100 px-3 py-1 rounded-full uppercase tracking-wider border border-orange-200">
+                      Age Gate
                     </span>
                   )}
                 </div>

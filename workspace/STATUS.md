@@ -4,9 +4,40 @@
 > Magica reads this from GitHub to review progress.
 
 ## Last Updated
-2026-08-20 — Phase 5 complete
+2026-08-20 — Phase 6 complete
 
-## Section: Phase 5 — Data-Driven State/County Expansion
+## Section: Phase 6 — Age-Gate Handling, Nominatim Compliance & Geocode Caching
+
+### Completed
+- **Section 1 (age-gate clearing script):** Added an `AGE_GATE_SCRIPT` constant that runs inside scraped pages via Firecrawl's `executeJavascript` action. The script fills date-of-birth inputs (`<input type="date">`, text fields, month/day/year `<select>` dropdowns), checks age-confirmation checkboxes, and clicks Continue/Submit/Enter-style buttons. Uses birthdate 06/23/1964. Each step is independently try/caught so one missing element doesn't abort the rest.
+- **Section 2 (age-gate detection):** After scraping, the function checks the returned markdown and HTML for 12 age-verification phrases ("verify your age", "you must be 21", "are you 21 or older", etc.). If any phrase is found, the result is flagged with `ageGateBlocked: true`, confidence is not boosted, `needsVerification` is set to true, and the notes field includes "likely blocked by age gate". An orange "Age Gate" badge appears in the provider detail panel header.
+- **Section 3 (Nominatim User-Agent):** Updated the Nominatim and Overpass API `User-Agent` headers from `"FirearmsIntelDashboard/1.0"` to `"NJHandgunMarketIntel/1.0 (contact: info@tolr.net)"` per Nominatim's usage policy.
+- **Section 4 (geocode caching):** Before calling Nominatim, the edge function now fetches all competitors with non-zero coordinates from the `Competitor` table and builds an in-memory cache keyed by normalized facility name. If a new scan result matches a cached name, coordinates and address are reused from the cache — skipping the Nominatim API call entirely and respecting rate limits.
+
+### Verified
+- [x] Build passes (`npm run build` — 16.09s, no errors)
+- [x] `firecrawl-scan` edge function deployed successfully
+- [x] Age-gate script, detection, Nominatim User-Agent, and geocode caching all bundled without errors
+- [x] "Age Gate" badge visible in provider detail panel when notes contain "age gate"
+- [x] Frontend `ProviderResult` type updated to include `ageGateBlocked` field
+- [x] Notes field flows age-gate flag from edge function through to the detail panel
+
+### Not Yet Verified (requires live scan)
+- [ ] Live scan against a known age-gated site to confirm the script dismisses the gate
+- [ ] Live scan to confirm geocode cache reduces Nominatim calls on re-scans
+- [ ] Nominatim API accepts the new User-Agent without rate-limiting
+
+### Files Changed
+- `supabase/functions/firecrawl-scan/index.ts` — added `AGE_GATE_SCRIPT`, age-gate detection in `firecrawlScrape()`, updated Nominatim + Overpass User-Agent headers, added geocode caching before Nominatim calls, added `ageGateBlocked` to `ProviderResult` type and OSM results
+- `src/sections/DashboardSection/components/DataCollectionPanel.tsx` — added `ageGateBlocked` to `ProviderResult` type, notes field includes age-gate flag when blocked
+- `src/sections/DashboardSection/components/ProviderDetailPanel.tsx` — added orange "Age Gate" badge in header when notes contain "age gate"
+
+### Next Up
+_Awaiting next phase from Magica in `workspace/BUILD_PLAN.md`._
+
+---
+
+## Previous: Phase 5 — Data-Driven State/County Expansion
 
 ### Completed
 - **Section 1 (scraper data-driven):** Fixed a hardcoded "NJ" in `searchQuery2` that would have broken searches for any non-NJ state. The scraper's `isKnownPlace()`, `geocodeNominatim()`, and `searchOverpass()` functions already accepted county/state as parameters and validated against the `County` reference table — no other changes needed.

@@ -166,6 +166,7 @@ type ProviderResult = {
   sourceName: string;
   confidence: number;
   needsVerification: boolean;
+  ageGateBlocked: boolean;
 };
 
 // ─── Normalize name for dedup ─────────────────────────────────────────
@@ -332,6 +333,108 @@ async function firecrawlSearch(
   }
 }
 
+// ─── Age-gate clearing script ──────────────────────────────────────────
+// Runs inside the scraped page via Firecrawl's executeJavascript action.
+// Each step is independently try/caught so one missing element doesn't
+// abort the rest. Birthdate: 06/23/1964 (June 23, 1964).
+const AGE_GATE_SCRIPT = `
+(function() {
+  var BIRTH = { month: '6', day: '23', year: '1964', iso: '1964-06-23', text: '06/23/1964' };
+  var monthText = 'June';
+
+  // 1. Fill <input type="date"> fields
+  try {
+    document.querySelectorAll('input[type="date"]').forEach(function(el) {
+      el.value = BIRTH.iso;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  } catch (e) {}
+
+  // 2. Fill birthdate <select> dropdowns (month/day/year)
+  try {
+    document.querySelectorAll('select').forEach(function(sel) {
+      var key = ((sel.name || '') + ' ' + (sel.id || '') + ' ' + (sel.getAttribute('aria-label') || '')).toLowerCase();
+      if (key.includes('month') || key.includes('dob') || key.includes('birth')) {
+        if (key.includes('month')) {
+          for (var i = 0; i < sel.options.length; i++) {
+            var opt = sel.options[i];
+            if (opt.value === BIRTH.month || opt.text.trim().toLowerCase() === monthText.toLowerCase()) {
+              sel.selectedIndex = i;
+              sel.dispatchEvent(new Event('change', { bubbles: true }));
+              break;
+            }
+          }
+        }
+      }
+      if (key.includes('day')) {
+        for (var i = 0; i < sel.options.length; i++) {
+          if (sel.options[i].value === BIRTH.day || sel.options[i].text.trim() === BIRTH.day) {
+            sel.selectedIndex = i;
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+            break;
+          }
+        }
+      }
+      if (key.includes('year')) {
+        for (var i = 0; i < sel.options.length; i++) {
+          if (sel.options[i].value === BIRTH.year || sel.options[i].text.trim() === BIRTH.year) {
+            sel.selectedIndex = i;
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+            break;
+          }
+        }
+      }
+    });
+  } catch (e) {}
+
+  // 3. Fill free-text birthdate inputs
+  try {
+    document.querySelectorAll('input[type="text"], input:not([type])').forEach(function(el) {
+      var key = ((el.name || '') + ' ' + (el.id || '') + ' ' + (el.placeholder || '')).toLowerCase();
+      if (key.includes('dob') || key.includes('birth')) {
+        el.value = BIRTH.text;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    });
+  } catch (e) {}
+
+  // 4. Check age-confirmation checkboxes
+  try {
+    document.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
+      var label = '';
+      var parent = cb.closest('label');
+      if (parent) {
+        label = parent.textContent || '';
+      } else if (cb.id) {
+        var lbl = document.querySelector('label[for="' + CSS.escape(cb.id) + '"]');
+        if (lbl) label = lbl.textContent || '';
+      }
+      label = label.toLowerCase();
+      if (label.includes('21') || label.includes('18') || label.includes('of age') || label.includes('years old')) {
+        if (!cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change', { bubbles: true })); }
+      }
+    });
+  } catch (e) {}
+
+  // 5. Click a Continue/Enter/Submit/Confirm-like button
+  try {
+    var btnTexts = ['enter', 'continue', 'submit', 'yes', 'confirm', 'i am', 'agree'];
+    var candidates = Array.from(document.querySelectorAll('button, a, input[type="submit"], input[type="button"]'));
+    for (var i = 0; i < candidates.length; i++) {
+      var text = (candidates[i].textContent || candidates[i].value || '').trim().toLowerCase();
+      for (var j = 0; j < btnTexts.length; j++) {
+        if (text.includes(btnTexts[j])) {
+          candidates[i].click();
+          return;
+        }
+      }
+    }
+  } catch (e) {}
+})();
+`;
+
 // ─── Firecrawl scrape: verify website + extract phone/services/coords ─
 async function firecrawlScrape(
   url: string,
@@ -344,9 +447,10 @@ async function firecrawlScrape(
   address: string;
   lat: number;
   lon: number;
+  ageGateBlocked: boolean;
 }> {
   if (!FIRECRAWL_API_KEY || !url) {
-    return { phone: "", servicesOffered: "", confidence: 0, verified: false, address: "", lat: 0, lon: 0 };
+    return { phone: "", servicesOffered: "", confidence: 0, verified: false, address: "", lat: 0, lon: 0, ageGateBlocked: false };
   }
 
   try {
@@ -360,12 +464,20 @@ async function firecrawlScrape(
         url,
         formats: ["markdown", "html"],
         onlyMainContent: false,
+        actions: [
+          { type: "wait", duration: 500 },
+          {
+            type: "executeJavascript",
+            script: AGE_GATE_SCRIPT,
+          },
+          { type: "wait", duration: 1000 },
+        ],
       }),
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
 
     if (!res.ok) {
-      return { phone: "", servicesOffered: "", confidence: 0, verified: false, address: "", lat: 0, lon: 0 };
+      return { phone: "", servicesOffered: "", confidence: 0, verified: false, address: "", lat: 0, lon: 0, ageGateBlocked: false };
     }
 
     const json = await res.json();
@@ -467,6 +579,27 @@ async function firecrawlScrape(
       }
     }
 
+    // ── Age-gate detection: check if page still shows age-verification language ──
+    const ageGatePhrases = [
+      "verify your age",
+      "you must be 21",
+      "must be at least 18",
+      "must be at least 21",
+      "confirm your date of birth",
+      "age verification",
+      "age verification required",
+      "are you 21 or older",
+      "are you 18 or older",
+      "i am at least 21",
+      "i am at least 18",
+      "enter your date of birth",
+    ];
+    const lowerMarkdown = markdown.toLowerCase();
+    const lowerHtml = html.toLowerCase();
+    const ageGateBlocked = ageGatePhrases.some(
+      (phrase) => lowerMarkdown.includes(phrase) || lowerHtml.includes(phrase),
+    );
+
     return {
       phone,
       servicesOffered,
@@ -475,9 +608,10 @@ async function firecrawlScrape(
       address,
       lat,
       lon,
+      ageGateBlocked,
     };
   } catch {
-    return { phone: "", servicesOffered: "", confidence: 0, verified: false, address: "", lat: 0, lon: 0 };
+    return { phone: "", servicesOffered: "", confidence: 0, verified: false, address: "", lat: 0, lon: 0, ageGateBlocked: false };
   }
 }
 
@@ -501,7 +635,7 @@ async function geocodeNominatim(
       `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=1&countrycodes=us${viewboxParam}`,
       {
         headers: {
-          "User-Agent": "FirearmsIntelDashboard/1.0",
+          "User-Agent": "NJHandgunMarketIntel/1.0 (contact: info@tolr.net)",
         },
         signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
       },
@@ -601,7 +735,7 @@ out center tags;
     const query = buildOverpassQuery(stateAreaClause);
     const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
     const res = await fetch(overpassUrl, {
-      headers: { "User-Agent": "FirearmsIntelDashboard/1.0" },
+      headers: { "User-Agent": "NJHandgunMarketIntel/1.0 (contact: info@tolr.net)" },
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
     if (!res.ok) {
@@ -657,6 +791,7 @@ out center tags;
         sourceName: "OpenStreetMap Overpass",
         confidence: 80,
         needsVerification: false,
+        ageGateBlocked: false,
       };
     });
 
@@ -850,7 +985,10 @@ Deno.serve(async (req: Request) => {
           r.lat = scraped.lat;
           r.lon = scraped.lon;
         }
-        if (scraped.verified) {
+        if (scraped.ageGateBlocked) {
+          r.ageGateBlocked = true;
+          r.needsVerification = true;
+        } else if (scraped.verified) {
           r.confidence = Math.min(r.confidence + scraped.confidence, 95);
           r.needsVerification = false;
         } else {
@@ -859,12 +997,62 @@ Deno.serve(async (req: Request) => {
       });
     await Promise.all(scrapePromises);
 
+    // ── Geocode caching: fetch existing competitors with coordinates ──
+    // Before calling Nominatim, check if we already have coordinates for this
+    // business name in this county from a previous scan.
+    const cachedGeocodes = new Map<string, { lat: number; lon: number; address: string }>();
+    if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+      try {
+        const geoUrl =
+          `${SUPABASE_URL}/rest/v1/Competitor?select=facilityName,county,latitude,longitude,address` +
+          `&latitude=not.is.null&latitude=neq.0`;
+        const geoRes = await fetch(geoUrl, {
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          },
+          signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+        });
+        if (geoRes.ok) {
+          const rows = await geoRes.json();
+          if (Array.isArray(rows)) {
+            for (const row of rows) {
+              const key = normalizeName(row.facilityName ?? "");
+              if (key && row.latitude && row.longitude) {
+                cachedGeocodes.set(key, {
+                  lat: parseFloat(row.latitude),
+                  lon: parseFloat(row.longitude),
+                  address: row.address ?? "",
+                });
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Geocode cache fetch failed:", e);
+      }
+    }
+
     // Geocode any results still missing coordinates using Nominatim (sequentially to respect rate limits)
     const needsGeo = merged
       .filter((r) => r.lat === 0 && r.lon === 0 && r.name)
       .slice(0, MAX_GEOCODES_PER_REQUEST);
     for (const r of needsGeo) {
       if (r.lat !== 0) continue; // might have been set by scrape
+
+      // Check geocode cache first — skip Nominatim if we already have coordinates
+      const cacheKey = normalizeName(r.name);
+      const cached = cachedGeocodes.get(cacheKey);
+      if (cached) {
+        r.lat = cached.lat;
+        r.lon = cached.lon;
+        if (!r.address || r.address === `${county}, ${state}`) {
+          r.address = cached.address;
+        }
+        r.confidence = Math.min(r.confidence + 10, 90);
+        continue; // skip Nominatim call
+      }
+
       const geo = await geocodeNominatim(r.name, county, state, stateBbox);
       if (geo) {
         r.lat = geo.lat;
