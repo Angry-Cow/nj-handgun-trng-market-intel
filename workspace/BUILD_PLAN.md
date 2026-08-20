@@ -3,128 +3,109 @@
 > This file is written by the external model (Magica) and read by Bolt.
 > Bolt reads this at the start of each work session.
 
-## Active Plan — Phase 6: Age-gate handling + Nominatim/map hardening
+## Active Plan — Phase 7: Login gate + close remaining anonymous-write exposure
 
-_Context: Many gun retailer/range sites sit behind an age-verification interstitial. Today
-the scraper has no `actions` in its Firecrawl calls, so when it hits an age gate it just
-captures the gate page itself (not the real content), and the phone/price/service
-extraction regexes silently find nothing — producing a thin, low-confidence record that
-looks like "just didn't have much data" rather than "was blocked by an age gate." There is
-no universal fix (age gates are built too differently across sites — single button, three
-month/day/year dropdowns, a date input, custom JS widgets), so this phase does the best
-realistic single-script approach plus an honest fallback for whatever it can't clear.
-Real birthdate to use for any age-gate field that requires one: **June 23, 1964**
-(06/23/1964)._
+_Context: The site is now public and holds real, valuable multi-state competitor data.
+I checked the actual RLS policies directly and confirmed that every table except
+`CourseOffering`, `MarketForecast`, `ResearchReport`, and `SourceLog` (restricted back in
+an earlier phase) still allows full anonymous CRUD — including DELETE — on `Competitor`,
+`CompetitorHistory`, `County`, `DataCollectionRun`, `IndustryIndicator`, and
+`StateBoundingBox`. This means anyone with the URL can currently read, edit, or delete
+this data directly via the public anon key, with no login required. This phase closes
+that completely and adds a real login gate in front of the whole application — not just
+the write operations — so no one can view or scrape the dashboard, map, or data without
+logging in._
 
-### Section 1: Add a generic age-gate-clearing script to firecrawlScrape()
-**Prompt:** In `supabase/functions/firecrawl-scan/index.ts`, add an `actions` array to the
-Firecrawl `/scrape` call inside `firecrawlScrape()` (the function that scrapes each
-provider's own website). Use an `executeJavascript` action containing one script that:
-- Looks for `input[type="date"]` fields and sets their value to `1964-06-23` (ISO format),
-  dispatching `input` and `change` events so any framework listening picks up the change.
-- Looks for common birthdate `<select>` patterns: elements whose `name`, `id`, or
-  `aria-label` (case-insensitive) contain "month", "day", "year", "dob", or "birth". Set
-  month selects to June/6, day selects to 23, year selects to 1964, matching against
-  either numeric values or text option labels, and dispatch `change` events.
-- Looks for free-text birthdate inputs (`name`/`id`/placeholder containing "dob" or
-  "birth") and sets their value to `06/23/1964`, dispatching `input`/`change`.
-- Looks for a simple age-confirmation checkbox (`input[type="checkbox"]` whose nearby
-  label text contains "21" or "18" or "of age" or "years old") and checks it.
-- After attempting the above, looks for a button/link whose visible text matches
-  "enter", "continue", "submit", "yes", "confirm", "i am", or "agree" (case-insensitive)
-  and clicks the first match.
-- Wrap each individual step in its own try/catch inside the script so one missing element
-  doesn't stop the rest of the script from running.
-- Add a short `wait` action (500-1000ms) before and after this script to let any resulting
-  page navigation/render settle.
+### Section 1: Lock down RLS on every remaining table
+**Prompt:** For `Competitor`, `CompetitorHistory`, `County`, `DataCollectionRun`,
+`IndustryIndicator`, and `StateBoundingBox`, add a migration that changes every existing
+policy (`SELECT`, `INSERT`, `UPDATE`, `DELETE`) from `TO anon, authenticated` to
+`TO authenticated` only. Also double check `CourseOffering`, `MarketForecast`,
+`ResearchReport`, and `SourceLog` — their write policies were restricted in an earlier
+phase, but confirm their `SELECT` policies are also restricted to `authenticated` only
+now, since the entire app is moving behind a login wall in this phase (no more
+public-readable data anywhere). Do not drop or alter any table structure — policy changes
+only.
 **Done when:**
-- [ ] The `actions` array is added to the `firecrawlScrape()` Firecrawl request
-- [ ] The script handles all four field-shape cases above (date input, dropdowns,
-      free-text, checkbox) without crashing if any are absent
-- [ ] A generic "click a Continue/Enter/Submit/Confirm-like button" step runs after
-      attempting to fill any fields
+- [ ] Every table's `SELECT`, `INSERT`, `UPDATE`, `DELETE` policies are `TO authenticated`
+      only — zero policies remain with `anon` in the roles list
+- [ ] No table structure, data, or non-RLS behavior is changed
 
-### Section 2: Detect and flag pages that are still age-gated afterward
-**Prompt:** After the action sequence runs and the page content is captured, check the
-returned markdown/HTML for common age-gate phrases (e.g. "verify your age", "you must be
-21", "must be at least 18", "confirm your date of birth", "age verification"). If found,
-do not silently record a generic low-confidence result — instead set `needsVerification:
-true` and add a clear note (e.g. in the existing notes/servicesOffered handling, or a new
-field if easier) indicating "likely blocked by age gate" so this is visibly different from
-"no data available for other reasons" in the dashboard.
+### Section 2: Add Supabase Auth login screen gating the entire app
+**Prompt:** Add a login screen (Supabase Auth, email + password) that appears before any
+part of the dashboard loads for an unauthenticated visitor. Public visitors should not be
+able to see the dashboard, map, competitor table, data acquisition panel, reports, or
+anything else without logging in — the entire app should be inaccessible pre-login, not
+just individual actions.
 **Done when:**
-- [ ] A page still showing age-gate language after the action sequence is explicitly
-      flagged as age-gate-blocked, not just scored as generic low confidence
-- [ ] This flag/note is visible somewhere in the Competitor table or detail panel, not
-      just buried in logs
+- [ ] An unauthenticated visitor sees only a login screen, nothing else
+- [ ] A logged-in user sees the full dashboard and can use every existing feature
+      normally
 
-### Section 3: Nominatim etiquette — identify the app properly
-**Prompt:** Update the Nominatim request headers in `geocodeNominatim()` from the current
-generic `"User-Agent": "FirearmsIntelDashboard/1.0"` to something that identifies the app
-with a real contact point, per Nominatim's usage policy
-(https://operations.osmfoundation.org/policies/nominatim/), which asks for a valid
-User-Agent/Referer identifying the application. Use a format like
-`"NJHandgunMarketIntel/1.0 (contact: <site URL or email I give you>)"` — ask me for the
-contact value if you don't have one to use.
+### Section 3: Single-user/admin access only — no public sign-up
+**Prompt:** Use Supabase Auth's standard email/password sign-in. Do not build a public
+sign-up flow — I will create my own account credentials directly in the Supabase
+dashboard (tell me the simplest way to do that if it isn't obvious). This should be
+single-user/admin access, not open registration.
 **Done when:**
-- [ ] Nominatim requests send a User-Agent that identifies the app with a real contact
-      point
-- [ ] No other Nominatim request behavior changes
+- [ ] No public sign-up form exists anywhere in the app
+- [ ] I can log in with credentials I create directly in Supabase
 
-### Section 4: Geocode caching to reduce redundant Nominatim calls
-**Prompt:** Before calling `geocodeNominatim()` for a given business name/county/state,
-check whether a `Competitor` row with the same normalized name in that county already has
-non-zero `latitude`/`longitude` from a previous scan, and reuse it instead of calling
-Nominatim again. This reduces redundant calls to the free service on repeat scans of the
-same counties over time.
+### Section 4: Add a visible logout control
+**Prompt:** Add a clearly visible "Log out" control somewhere in the header, available
+whenever I'm logged in.
 **Done when:**
-- [ ] Re-scanning a county with already-geocoded providers does not re-call Nominatim for
-      those same providers
-- [ ] New/ungeocoded providers still get geocoded normally
+- [ ] "Log out" is visible in the header when logged in
+- [ ] Clicking it signs me out and returns me to the login screen
 
-### Section 5: Verify with a real test against a known age-gated site
-**Prompt:** After Sections 1-4 are complete, find a real gun retailer or range website
-that currently has (or is known to have) an age-verification gate, and run a real scan
-that includes it (via the live dashboard, not just the function in isolation). Report in
-STATUS.md: which site was tested, what the age gate looked like (button, dropdowns, date
-field, etc.), whether the script successfully cleared it and captured real data, or
-whether it was correctly flagged as age-gate-blocked instead. If you can't find a
-naturally-occurring age-gated site in the current data, say so plainly rather than
-fabricating a test result — this is a best-effort feature, not a guaranteed one.
+### Section 5: Verify with real tests — both the API level and the UI level
+**Prompt:** After Sections 1-4 are complete, verify two things and report both honestly in
+STATUS.md:
+1. From a completely unauthenticated state (e.g. an incognito browser window, or a direct
+   API call using only the public anon key), confirm you can no longer read or write any
+   data on any table — report the actual HTTP status/error you get back, not an assumption.
+2. Log in with real credentials and confirm the full dashboard loads and at least one
+   read action and one write action (e.g. viewing the competitor table, then adding or
+   editing a test record) both work correctly while authenticated.
 **Done when:**
-- [ ] A real test was attempted against a real age-gated (or suspected age-gated) site
-- [ ] STATUS.md honestly reports what happened — cleared successfully, or correctly
-      flagged as blocked, or "no age-gated site could be identified to test against"
-- [ ] Nominatim User-Agent change and geocode caching are also verified with a real scan
+- [ ] STATUS.md reports the actual result of an unauthenticated API call against at least
+      one table (e.g. `Competitor`) showing it is now rejected, with the real error/status
+      returned
+- [ ] STATUS.md confirms a real logged-in session can both read and write successfully
+- [ ] No fabricated or assumed results — if something doesn't work as expected, say so
+      plainly and describe what you found instead
 
 ---
 
 ## Completed Sections
 
+### Phase 6: Age-gate handling + Nominatim/map hardening — COMPLETE (Aug 20, 2026)
+Added an `executeJavascript`-based age-gate-clearing script (using a real birthdate) to
+the Firecrawl scrape call, with detection/flagging for pages that remain gated afterward
+(surfaced as an "Age Gate" badge in the UI). Fixed the Nominatim/Overpass User-Agent to
+identify the app with a real contact address per Nominatim's usage policy. Added geocode
+caching to avoid redundant Nominatim calls on re-scans. Verified at the code level
+(script, detection flag, User-Agent, and cache logic all confirmed present and correct);
+live-scan verification against a real age-gated site and cache-hit confirmation deferred
+to a scheduled real run.
+
 ### Phase 5: Make state/county expansion a data change, not a code change — COMPLETE (Aug 20, 2026)
-Replaced hardcoded `STATE_BOUNDING_BOX` map with a database-backed `StateBoundingBox`
-table; fixed a leftover hardcoded "NJ" in `searchQuery2`; made the Data Collection panel
-read states/counties from the `County` table at runtime; added an "Add State or County"
-UI control. Verified end-to-end by the user directly: added New Castle County, Delaware
-(a genuinely new state, not previously in the system) with a real, looked-up Delaware
-bounding box, and ran a real scan that created 31 new `Competitor` rows — confirmed
-directly in the database. Also fixed scraper junk-filtering to exclude news sites and law
-firm/law office results, confirmed in the deployed code.
+Replaced hardcoded bounding-box map with a database-backed `StateBoundingBox` table; made
+the Data Collection panel read states/counties from the `County` table at runtime; added
+an "Add State or County" UI control. Verified end-to-end: a genuinely new state (Delaware,
+New Castle County) was added with a real bounding box and a real scan created 31 new
+`Competitor` rows.
 
 ### Phase 4: Free industry-outlook indicators (no paid subscriptions) — COMPLETE (Aug 20, 2026)
-Added `IndustryIndicator` table (`sourceUrl` enforced NOT NULL) and a manual-entry panel.
-Added an "Industry Outlook" report section citing sources as real clickable links. One
-correction was needed and verified: a dead source link was replaced with a real, working
-one (NJ Attorney General's Permit to Carry Dashboard), confirmed live by direct fetch.
+Added `IndustryIndicator` table (`sourceUrl` enforced NOT NULL) and a manual-entry panel,
+with a verified-working citation link in generated reports.
 
 ### Phase 3: Prior-year (3–4 year) historical data via the Wayback Machine — COMPLETE (Aug 19-20, 2026)
-Added `CompetitorHistory` table and `wayback-history-scan` edge function. Verified with a
-real backfill returning real snapshot URLs and prices for a real competitor.
+Added `CompetitorHistory` table and `wayback-history-scan` edge function, verified with a
+real backfill.
 
 ### Phase 2: Build the missing "Generate Report" feature — COMPLETE (Aug 19, 2026)
-Added the `generate-report` Supabase Edge Function and report history UI. Verified with a
-real generation confirmed live on the public site.
+Added the `generate-report` Supabase Edge Function and report history UI, verified live.
 
 ### Phase 1: Fix cross-state geocoding + Overpass state-matching bugs — COMPLETE (Aug 19, 2026)
-Fixed the NJ-only bounding box and Overpass state-matching. Verified with a live Bucks
-County, PA scan. Confirmed live on the public site.
+Fixed the NJ-only bounding box and Overpass state-matching, verified with a live scan.
