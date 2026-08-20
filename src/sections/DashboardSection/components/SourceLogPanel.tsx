@@ -37,6 +37,7 @@ function formatDate(date: Date | string) {
 export const SourceLogPanel = () => {
   const { data: logs, isPending, error } = useQuery("SourceLog", {
     orderBy: { lastScrapeDate: "desc" },
+    limit: 20,
   });
 
   const successCount = logs?.filter((l) => l.status === "Success").length ?? 0;
@@ -171,7 +172,7 @@ export const SourceLogPanel = () => {
             {/* Footer */}
             <div className="flex items-center justify-between px-6 py-4 bg-gray-50 border-t border-gray-100">
               <span className="text-xs font-medium text-gray-400">
-                {logs.length} source{logs.length !== 1 ? "s" : ""} tracked
+                Showing {logs.length} most recent entr{logs.length !== 1 ? "ies" : "y"}
               </span>
               <span className="text-xs font-medium text-gray-400">
                 Sorted by most recent scrape
