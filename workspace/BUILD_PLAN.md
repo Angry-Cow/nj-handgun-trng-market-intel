@@ -3,108 +3,101 @@
 > This file is written by the external model (Magica) and read by Bolt.
 > Bolt reads this at the start of each work session.
 
-## Active Plan — Phase 4: Free industry-outlook indicators (no paid subscriptions)
+## Active Plan — Phase 5: Make state/county expansion a data change, not a code change
 
-_Context: The report should include forward-looking / directional industry context,
-sourced only from free public data — no paid industry-report subscriptions. None of these
-sources are specific to "handgun training" alone (no free source is), so every number must
-be clearly labeled as a proxy with its exact source and date, not implied to be
-training-industry-specific. This phase adds manual entry (not automated scraping) for four
-specific free sources, since some are PDFs, some require picking the right row/column, and
-the data going into a report I'm putting my name on needs to be something I've reviewed
-before it's cited._
+_Context: I plan to keep adding counties and states over time (currently NJ + PA, 15
+counties). Adding a new state or county should be something done from the existing
+`County` table / Data Acquisition panel, without needing a code change each time, other
+than the one-time addition of that state's geocoding bounding box (added in Phase 1's
+`STATE_BOUNDING_BOX` map)._
 
-### Section 1: Add an `IndustryIndicator` table
-**Prompt:** Add a new table `IndustryIndicator` with columns: `id` (uuid pk), `sourceName`
-(text, e.g. "FBI NICS Background Checks — NJ"), `metricName` (text, e.g. "Monthly
-background checks, New Jersey"), `state` (text, nullable), `county` (text, nullable),
-`period` (text, e.g. "2026-07"), `value` (numeric), `unit` (text, e.g. "checks",
-"establishments", "USD"), `sourceUrl` (text, required — must always be the exact page/file
-the number came from), `retrievedAt` (timestamptz), `notes` (text, nullable). Enable RLS
-matching the pattern from the other tables.
+### Section 1: Confirm the scraper takes county/state purely as data
+**Prompt:** Confirm (and fix if not already true) that `searchOverpass()` and
+`geocodeNominatim()` in `supabase/functions/firecrawl-scan/index.ts` take `county`/`state`
+purely as parameters — no part of either function should assume New Jersey or Pennsylvania
+specifically outside of the `STATE_BOUNDING_BOX` and `STATE_ABBR` maps added in Phase 1.
 **Done when:**
-- [ ] `IndustryIndicator` table exists with the columns above
-- [ ] `sourceUrl` is enforced as required (not nullable)
-- [ ] RLS enabled matching the existing table pattern
+- [ ] No hardcoded state-specific logic remains outside the two lookup maps
+- [ ] A state not yet in `STATE_BOUNDING_BOX`/`STATE_ABBR` still runs without crashing
+      (falls back to no bounding box / no ISO code, per Phase 1's fallback behavior)
 
-### Section 2: Add a manual-entry form for industry indicators
-**Prompt:** Add a manual-entry modal (similar in spirit to `AddCompetitorModal.tsx`) where
-I can paste in a value + its source + date for any of the following four sources. Do not
-build automated scraping for these — they require me to review and choose the exact
-number before it's cited:
-- FBI NICS monthly firearm background checks for New Jersey (source:
-  https://www.fbi.gov/file-repository/cjis/nics_firearm_checks_-_month_year_by_state.pdf/view,
-  or the pre-parsed CSV maintained by the Data Liberation Project:
-  https://www.data-liberation-project.org/datasets/nics-firearm-background-checks/)
-- BLS OEWS state-level wage data for the closest instructor/training occupation code
-  (source: https://www.bls.gov/oes/tables.htm)
-- Census County Business Patterns establishment counts for NAICS 713990 (Rifle & Pistol
-  Ranges is sub-code 713990-38) by county (source:
-  https://www.census.gov/programs-surveys/cbp/data/datasets.html)
-- IBISWorld's public preview topline figure for the Shooting Ranges industry (source:
-  https://www.ibisworld.com/united-states/industry/shooting-ranges/5467/ — the free
-  preview number only, not the paid report)
-
-The form should have fields matching the `IndustryIndicator` columns, with `sourceUrl`
-required before saving, and should offer the 4 source names above as quick-select options
-(with free-text override allowed for other sources later).
+### Section 2: Make the Data Acquisition panel read states/counties from the database
+**Prompt:** In `DataCollectionPanel.tsx`, the state/county checkboxes are currently
+hard-coded (the two state names, and the 15 county names). Change this to read the
+available states/counties from the `County` table via a live query instead of a hard-coded
+list, so adding a row to `County` (which the app already supports doing) is enough to make
+a new county selectable for scanning, without a redeploy.
 **Done when:**
-- [ ] Manual-entry modal exists and is accessible from the dashboard
-- [ ] All `IndustryIndicator` fields are editable, with `sourceUrl` required
-- [ ] Saved entries appear immediately in a simple indicator list/table
+- [ ] State/county checkboxes are populated from the `County` table at runtime
+- [ ] Adding a test row directly to `County` makes it appear as a selectable option without
+      any code change or redeploy
+- [ ] Existing 15 counties across NJ/PA still display and function identically to before
 
-### Section 3: Include an Industry Outlook section in generated reports
-**Prompt:** Update the `generate-report` function from Phase 2 to include an "Industry
-Outlook" section that pulls the most recent `IndustryIndicator` row per `sourceName`,
-quotes the number with its `sourceUrl` as an inline citation, and explicitly states these
-are national/state-level proxies rather than training-industry-specific figures. If no
-`IndustryIndicator` rows exist yet, omit this section entirely (no broken/empty section).
+### Section 3: Add an "Add State/County" admin control
+**Prompt:** Add a small "Add State/County" control in the Data Acquisition section that
+lets me add a new `County` row directly from the UI. If the state is new (not yet in
+`STATE_BOUNDING_BOX`), prompt me for its bounding box (four numbers: west, north, east,
+south) so it can be added to that map — since that one piece genuinely needs a real,
+correct value per state and should not silently default to "no bounding box" once several
+states are in use (a missing bounding box is fine for exactly one or two states while
+testing, but as more states are added, an unbounded geocode search increases the risk of
+cross-state mismatches).
 **Done when:**
-- [ ] Generated reports include an Industry Outlook section when indicator data exists
-- [ ] Each cited number includes its source name and `sourceUrl`
-- [ ] The section explicitly states these are proxies, not training-specific figures
-- [ ] Reports generated with no indicator data simply omit this section
+- [ ] I can add a new County row from the UI without touching code
+- [ ] Adding a new state prompts for its bounding box and stores it somewhere the edge
+      function can read (e.g. a new `StateBoundingBox` table, or an extension of `County`)
+- [ ] Existing NJ/PA bounding boxes are unaffected by this change
 
-### Section 4: Verify with a real entry and a real report
-**Prompt:** After Sections 1-3 are complete, manually enter one real indicator (pick any
-one of the 4 sources above, with a real current value you look up yourself) from the live
-dashboard, then generate a new report and confirm the Industry Outlook section appears
-with that real value and source link. Report in STATUS.md: the indicator entered (source,
-metric, value, sourceUrl), and confirm the new report's markdown actually contains that
-citation.
+### Section 4: Verify the known-place validation still works correctly
+**Prompt:** Double check that `PLACE_NAME_RE` validation and `isKnownPlace()` in
+`firecrawl-scan/index.ts` still work correctly when new states/counties are added via the
+UI (Section 3) rather than via a migration — they should, since both check against the
+`County` table, but confirm this with a real test and fix any edge case found.
 **Done when:**
-- [ ] A real indicator was entered from the live dashboard (not seeded/faked data)
-- [ ] A new report was generated and its Industry Outlook section contains that indicator
-- [ ] STATUS.md quotes the actual markdown text of the Industry Outlook section produced
+- [ ] A county added via the new UI control passes `isKnownPlace()` validation
+- [ ] A scan for that county runs successfully end-to-end
 
-I'm intentionally not asking for automatic scraping of these four sources in this phase —
-some are PDFs, some require picking the right row/column, and I want to control exactly
-which numbers go into a report I'm putting my name on. If a fully automated ingestion later
-turns out to be worth it for one specific source, I'll ask for it as its own phase.
+### Section 5: Verify with a real new county added end-to-end
+**Prompt:** After Sections 1-4 are complete, add one real new county from a state not
+currently in the system (pick any real US county/state combination), provide its state's
+real bounding box (look up real lat/lon bounds for that state), and run a real scan for it
+from the live dashboard. Report in STATUS.md: which state/county was added, the bounding
+box values used and where you got them, and the actual scan results (records
+found/created, and whether any got real coordinates).
+**Done when:**
+- [ ] A genuinely new state/county was added through the UI (not seeded/faked)
+- [ ] A real scan ran successfully for it and returned real results
+- [ ] STATUS.md reports the real bounding box source and real scan output
 
 ---
 
 ## Completed Sections
 
+### Phase 4: Free industry-outlook indicators (no paid subscriptions) — COMPLETE (Aug 20, 2026)
+Added `IndustryIndicator` table (with `sourceUrl` enforced NOT NULL at the database level)
+and a manual-entry panel for the four free sources researched (FBI NICS, BLS OEWS, Census
+CBP, IBISWorld free preview). Added an "Industry Outlook" section to generated reports that
+cites each indicator's source as a real clickable markdown link. One round of correction
+was needed: the first test indicator's sourceUrl was a dead link (404); it was replaced
+with a verified-working source (NJ Attorney General's Permit to Carry Dashboard,
+https://www.njoag.gov/permittocarry/ — confirmed live by me directly), and the report
+generator was fixed to actually include the link, not just the source name. Verified by
+generating a fresh report directly via the deployed edge function and confirming the real
+markdown link appears in the stored report content.
+
 ### Phase 3: Prior-year (3–4 year) historical data via the Wayback Machine — COMPLETE (Aug 19-20, 2026)
-Added `CompetitorHistory` table and `wayback-history-scan` edge function (queries the
-Internet Archive's free Availability API, capped at 4 years, respects a 500ms delay
-between calls, returns clean `no_snapshot` status instead of an error when nothing is
-found). Added a "Backfill Historical Pricing" control to the Competitor detail panel and a
-Year-over-Year Pricing section to generated reports. Verified independently: real backfill
-for Gun For Hire (gunforhire.com) returned real snapshot URLs and $99 prices for 2023 and
-2024 (confirmed directly in the `CompetitorHistory` table), and a second competitor (RTSP
-Randolph) correctly returned no snapshots rather than fabricated data. Confirmed live on
-the public site.
+Added `CompetitorHistory` table and `wayback-history-scan` edge function. Added a
+"Backfill Historical Pricing" control to the Competitor detail panel and a Year-over-Year
+Pricing section to generated reports. Verified: real backfill for Gun For Hire
+(gunforhire.com) returned real snapshot URLs and $99 prices for 2023 and 2024. Confirmed
+live on the public site.
 
 ### Phase 2: Build the missing "Generate Report" feature — COMPLETE (Aug 19, 2026)
 Added the `generate-report` Supabase Edge Function and a "Generate New Report" button;
-rewrote the report display to show up to 5 most recent reports. Verified independently and
-confirmed live on the public site: `ResearchReport` row count increased from 2 to 3, new
-report covers 215 providers with a real computed executive summary.
+rewrote the report display to show up to 5 most recent reports. Verified and confirmed
+live on the public site.
 
 ### Phase 1: Fix cross-state geocoding + Overpass state-matching bugs — COMPLETE (Aug 19, 2026)
 Fixed the NJ-only bounding box in `geocodeNominatim()` and `searchOverpass()`
-state-matching to use ISO 3166-2 codes. Verified with a live Bucks County, PA scan that
-created 18 new `Competitor` rows including real Pennsylvania coordinates. Confirmed live on
-the public site.
+state-matching to use ISO 3166-2 codes. Verified with a live Bucks County, PA scan.
+Confirmed live on the public site.
