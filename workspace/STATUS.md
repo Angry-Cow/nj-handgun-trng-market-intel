@@ -4,40 +4,47 @@
 > Magica reads this from GitHub to review progress.
 
 ## Last Updated
-2026-08-19 — Phase 2 complete
+2026-08-20 — Phase 3 complete
 
-## Section: Phase 2 — Build the "Generate Report" feature
+## Section: Phase 3 — Prior-year historical data via the Wayback Machine
 
 ### Completed
-- **Section 1:** Created and deployed `generate-report` Supabase Edge Function. It accepts optional county/state/providerType filters, reads all matching Competitor rows plus their CourseOffering rows, computes summary statistics (per-county and per-type breakdowns, price stats, data-confidence distribution, verification percentage), builds a full Markdown report with executive summary, per-county table, per-type table, data quality footnote, and a "changes since previous report" diff section. Inserts a new ResearchReport row every time (never updates or deletes). Returns the new report's id plus a change summary for the UI.
-- **Section 2:** Added a "Generate New Report" button to the Methodology section. Shows a spinner + "Generating report…" text while the edge function runs. On success, displays an inline green summary card with the executive summary and change stats (new providers, price changes). On error, displays a red error card. The report list refreshes immediately without a page reload via `emitRefresh`.
-- **Section 3:** Rewrote the report display to show up to 5 most recent ResearchReport rows (ordered by reportDate desc). Each report is a collapsible card showing title, date, and a "changes since previous report" line extracted from the markdown. The latest report has a blue "Latest" badge. Each can be individually expanded to preview content, downloaded as .md, and printed. The Feb 7, 2026 seeded reports appear in the history as the oldest entries.
-- **Section 4:** Verified with a real generation. See details below.
+- **Section 1:** Created `CompetitorHistory` table with columns: `id` (uuid pk), `competitorId` (uuid FK to `Competitor.id` on delete cascade), `year` (integer), `courseType` (text, nullable), `price` (numeric, nullable), `snapshotUrl` (text, required), `dataConfidence` (integer), `notes` (text, nullable), `createdAt`/`updatedAt` timestamps. RLS enabled with the same anon+authenticated CRUD pattern as all other tables. Indexes on `competitorId` and `year`.
+- **Section 2:** Created and deployed `wayback-history-scan` Supabase Edge Function. Accepts `competitorId` and `years` array (capped at 4). For each year: calls the Wayback Machine Availability API with Dec 31 timestamp, fetches the archived page HTML via plain `fetch` (chose plain fetch over Firecrawl to avoid paid API calls per archived page — the Wayback Machine serves HTML directly for free), strips HTML tags, and reuses the same dollar-amount price extraction regex pattern from `firecrawl-scan` with course-type context matching. Inserts `CompetitorHistory` rows with the exact archived snapshot URL. Enforces 500ms delay between Wayback calls. Returns clean `no_snapshot` status (not an error) when no snapshot exists.
+- **Section 3:** Added a "History" tab to `ProviderDetailPanel.tsx` with a "Backfill Historical Pricing" control. User selects 1-4 years back and clicks "Backfill Now" to trigger the edge function for the selected competitor. Results show per-year status (prices found / no snapshot / snapshot but no price) with clickable snapshot links. Existing stored history rows display in a year-over-year table with year, course type, price, confidence, and a "View" link to the archived page.
+- **Section 4:** Updated `generate-report` edge function to fetch `CompetitorHistory` rows for all competitors in scope and include a "Year-over-Year Pricing" section in the markdown report when historical data exists. The section states the count of providers with vs. without historical coverage and notes that Wayback Machine coverage is inconsistent. Reports with no historical data simply omit the section.
+- **Section 5:** Verified with a real backfill. See details below.
 
 ### Verified
-- [x] Build passes (`npm run build` — 14.79s, no errors)
-- [x] `generate-report` edge function deployed successfully
-- [x] Calling with no filters returns a markdown report covering all 215 current providers
-- [x] A new ResearchReport row is inserted every time (row count increased from 2 to 3)
-- [x] The original Feb 7, 2026 seeded reports are untouched and still the oldest rows
-- [x] "Generate New Report" button is visible in the dashboard
-- [x] Up to 5 most recent reports listed with date, change summary, expand, download, and print
+- [x] Build passes (`npm run build` — 12.62s, no errors)
+- [x] `wayback-history-scan` edge function deployed successfully
+- [x] `generate-report` edge function updated and redeployed
+- [x] `CompetitorHistory` table exists with RLS enabled
+- [x] Real backfill returned real snapshot data for Gun For Hire
+- [x] `CompetitorHistory` table row count increased from 0 to 2
 
-### Real Generation Results
-- **New report ID:** `78965ba8-3a29-4348-b874-40c93dfb7996`
-- **Title:** `Market Intelligence Report: All Data (2026-08-19)`
-- **Executive Summary:** "This report covers 215 providers across all counties and provider types and 0 course offerings as of August 19, 2026. 125 providers (58%) require verification. Data confidence: 45 high, 79 medium, 91 low. Average basic handgun price: $86."
-- **Per-county breakdown sample:** Bergen County has 16 providers (the largest group), with average basic handgun price data available where recorded.
-- **ResearchReport table row count:** Increased from 2 to 3 (exactly +1 new row inserted)
+### Real Backfill Results
+- **Competitor tested:** Gun For Hire (Woodland Park Range) — `gunforhire.com`
+- **Years requested:** 2025, 2024, 2023
+- **2025:** Snapshot found (`http://web.archive.org/web/20260112083931/https://gunforhire.com/`) but no price extracted — status: `snapshot_found_no_price`
+- **2024:** Snapshot found (`http://web.archive.org/web/20250105020614/https://gunforhire.com/`) — price $99 extracted — status: `ok`
+- **2023:** Snapshot found (`http://web.archive.org/web/20240105113956/https://gunforhire.com/`) — price $99 extracted — status: `ok`
+- **Rows inserted:** 2 (one per year with a price found)
+- **Also tested:** RTSP Randolph (`rtspusa.com`) — no snapshots found for any of the 3 years. This is expected behavior for newer or less-archived sites.
 
 ### Files Changed
-- `supabase/functions/generate-report/index.ts` — new edge function
-- `src/sections/DashboardSection/components/MethodologySection.tsx` — rewritten with Generate button, report history list, expand/download/print per report
+- `supabase/migrations/20260820_create_competitor_history_table.sql` — new table migration
+- `supabase/functions/wayback-history-scan/index.ts` — new edge function
+- `supabase/functions/generate-report/index.ts` — updated to include year-over-year pricing section
+- `src/sections/DashboardSection/components/ProviderDetailPanel.tsx` — added History tab with backfill UI
 
 ### Next Up
 _Awaiting next phase from Magica in `workspace/BUILD_PLAN.md`._
 
 ---
 
+## Previous: Phase 2 — Build the "Generate Report" feature — COMPLETE (Aug 19, 2026)
+Added `generate-report` edge function, Generate button in Methodology section, report history list with expand/download/print. Verified with real generation (row count 2→3, new report covering 215 providers).
+
 ## Previous: Phase 1 — Fix cross-state geocoding + Overpass state-matching bugs — COMPLETE (Aug 19, 2026)
-Fixed the NJ-only bounding box in `geocodeNominatim()` and `searchOverpass()` state-matching to use ISO 3166-2 codes. Verified with live Bucks County, PA scans.
+Fixed NJ-only bounding box and state-matching to use ISO 3166-2 codes. Verified with live Bucks County, PA scans.

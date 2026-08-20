@@ -123,6 +123,21 @@ async function fetchSourceLogCount(): Promise<number> {
   return Array.isArray(data) ? data.length : 0;
 }
 
+async function fetchHistoryRows(
+  competitorIds: string[],
+): Promise<any[]> {
+  if (competitorIds.length === 0) return [];
+  const all: any[] = [];
+  for (let i = 0; i < competitorIds.length; i += 100) {
+    const batch = competitorIds.slice(i, i + 100);
+    const inClause = batch.map((id) => `"${id}"`).join(",");
+    const path = `/rest/v1/CompetitorHistory?select=*&competitorId=in.(${inClause})&order=year.asc`;
+    const rows = await supabaseFetch(path);
+    all.push(...(rows ?? []));
+  }
+  return all;
+}
+
 async function fetchPreviousReport(): Promise<ResearchReport | null> {
   const data = await supabaseFetch(
     "/rest/v1/ResearchReport?select=id,title,reportDate,contentMarkdown,executiveSummary&order=reportDate.desc&limit=1",
@@ -196,6 +211,7 @@ function buildMarkdown(
   filters: { county?: string; state?: string; providerType?: string },
   sourceLogCount: number,
   prevReport: ResearchReport | null,
+  historyRows: any[],
 ): { markdown: string; summary: string; changes: ChangeSummary } {
   const now = new Date();
   const dateStr = now.toLocaleDateString("en-US", {
@@ -304,6 +320,53 @@ _This is the first generated report. No previous report to compare against._
 `;
   }
 
+  // Year-over-Year pricing from Wayback Machine history
+  const competitorsWithHistory = new Set(historyRows.map((r) => r.competitorId));
+  const competitorsWithoutHistory = competitors.length - competitorsWithHistory.size;
+
+  let historySection = "";
+  if (historyRows.length > 0 && competitorsWithHistory.size > 0) {
+    // Group history rows by competitor then by year
+    const byCompetitor = new Map<string, any[]>();
+    for (const r of historyRows) {
+      const arr = byCompetitor.get(r.competitorId) ?? [];
+      arr.push(r);
+      byCompetitor.set(r.competitorId, arr);
+    }
+
+    const historyTableRows = Array.from(byCompetitor.entries())
+      .map(([compId, rows]) => {
+        const comp = competitors.find((c) => c.id === compId);
+        const name = comp?.facilityName ?? "Unknown";
+        const byYear = new Map<number, any[]>();
+        for (const r of rows) {
+          const arr = byYear.get(r.year) ?? [];
+          arr.push(r);
+          byYear.set(r.year, arr);
+        }
+        const yearEntries = Array.from(byYear.entries()).sort((a, b) => a[0] - b[0]);
+        const yearCols = yearEntries.map(([year, yrRows]) => {
+          const prices = yrRows.map((r: any) => r.price).filter((p: any) => p != null);
+          if (prices.length === 0) return "—";
+          const min = Math.min(...prices);
+          const max = Math.max(...prices);
+          return min === max ? `${min}` : `${min}–${max}`;
+        }).join(" / ");
+        return `| ${name} | ${rows.length} | ${yearCols} |`;
+      }).join("\n");
+
+    historySection = `## Year-over-Year Pricing (Wayback Machine Historical Data)
+
+Historical pricing data was available for **${competitorsWithHistory.size}** of ${competitors.length} providers in scope. **${competitorsWithoutHistory}** providers had no historical data available (Wayback Machine coverage of small local business sites is inconsistent — absence does not imply the provider did not exist or had no pricing).
+
+| Provider | Data Points | Prices by Year |
+|---------|------------|----------------|
+${historyTableRows}
+
+_Historical prices extracted from archived snapshots via the Internet Archive's Wayback Machine. Each data point links to a specific archived page snapshot._
+`;
+  }
+
   // Filter description
   const filterDesc = [
     filters.county ? `County: ${filters.county}` : null,
@@ -353,6 +416,7 @@ ${typeRows || "| — | 0 | — | 0 |"}
 
 ${changesSection}
 
+${historySection}
 ## Methodology & Data Quality
 
 Data is collected via automated web scraping (Firecrawl) and OpenStreetMap Overpass API queries. Each provider record is scored for confidence based on data completeness (coordinates, website, address, phone). Providers missing key data fields are flagged for manual verification.
@@ -421,6 +485,7 @@ Deno.serve(async (req: Request) => {
 
     const competitorIds = competitors.map((c) => c.id);
     const courses = await fetchCourseOfferings(competitorIds);
+    const historyRows = await fetchHistoryRows(competitorIds);
 
     // Build the report
     const { markdown, summary, changes } = buildMarkdown(
@@ -429,6 +494,7 @@ Deno.serve(async (req: Request) => {
       filters,
       sourceLogCount,
       prevReport,
+      historyRows,
     );
 
     const now = new Date().toISOString();

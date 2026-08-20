@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useMutation } from "@/lib/useMutation";
-import { useQuery } from "@/lib/useQuery";
+import { useQuery, emitRefresh } from "@/lib/useQuery";
 import { safeUrl } from "@/lib/sanitize";
+import { supabase } from "@/lib/supabase";
+import { History, ExternalLink, Loader2 } from "lucide-react";
 
 type Competitor = {
   id: string;
@@ -121,11 +123,15 @@ const COURSE_TYPE_COLORS: Record<string, string> = {
 };
 
 export const ProviderDetailPanel = ({ competitor, onClose, onFlyTo }: Props) => {
-  const [activeTab, setActiveTab] = useState<"overview" | "courses">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "courses" | "history">("overview");
   const [isEditing, setIsEditing] = useState(false);
   const [editState, setEditState] = useState<EditState | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [backfillYears, setBackfillYears] = useState(3);
+  const [backfillLoading, setBackfillLoading] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<any[] | null>(null);
+  const [backfillError, setBackfillError] = useState<string | null>(null);
 
   const { update, isPending: isSaving } = useMutation("Competitor");
 
@@ -146,7 +152,42 @@ export const ProviderDetailPanel = ({ competitor, onClose, onFlyTo }: Props) => 
     setSaveError(null);
     setSaveSuccess(false);
     setActiveTab("overview");
+    setBackfillResult(null);
+    setBackfillError(null);
   }, [competitor?.id]);
+
+  // Fetch existing history rows for this competitor
+  const { data: historyRows, isPending: historyLoading } = useQuery(
+    "CompetitorHistory",
+    competitor
+      ? { where: { competitorId: competitor.id }, orderBy: { year: "asc" } }
+      : { limit: 0 },
+  ) as { data: any[] | null; isPending: boolean };
+
+  const handleBackfill = async () => {
+    if (!competitor) return;
+    setBackfillLoading(true);
+    setBackfillError(null);
+    setBackfillResult(null);
+    try {
+      const currentYear = new Date().getFullYear();
+      const years: number[] = [];
+      for (let i = 1; i <= backfillYears; i++) {
+        years.push(currentYear - i);
+      }
+      const { data, error } = await supabase.functions.invoke("wayback-history-scan", {
+        body: { competitorId: competitor.id, years },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setBackfillResult(data?.results ?? []);
+      emitRefresh("CompetitorHistory");
+    } catch (err: any) {
+      setBackfillError(err.message ?? "Backfill failed. Please try again.");
+    } finally {
+      setBackfillLoading(false);
+    }
+  };
 
   const startEdit = () => {
     if (!competitor) return;
@@ -293,7 +334,7 @@ export const ProviderDetailPanel = ({ competitor, onClose, onFlyTo }: Props) => 
 
             {/* Tab bar */}
             <div className="flex border-b border-gray-100 shrink-0 px-8">
-              {(["overview", "courses"] as const).map((tab) => (
+              {(["overview", "courses", "history"] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => { setActiveTab(tab); setIsEditing(false); setEditState(null); }}
@@ -305,6 +346,8 @@ export const ProviderDetailPanel = ({ competitor, onClose, onFlyTo }: Props) => 
                 >
                   {tab === "courses"
                     ? `Courses${courses && courses.length > 0 ? ` (${courses.length})` : ""}`
+                    : tab === "history"
+                    ? `History${historyRows && historyRows.length > 0 ? ` (${historyRows.length})` : ""}`
                     : "Overview"}
                 </button>
               ))}
@@ -574,6 +617,136 @@ export const ProviderDetailPanel = ({ competitor, onClose, onFlyTo }: Props) => 
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* History Tab */}
+            {activeTab === "history" && (
+              <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
+                {/* Backfill Control */}
+                <div className="bg-blue-50 border border-blue-200 rounded-2xl px-5 py-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <History className="h-4 w-4 text-blue-600" />
+                    <h3 className="text-sm font-black text-blue-900">Backfill Historical Pricing</h3>
+                  </div>
+                  <p className="text-xs text-blue-700 mb-4 leading-relaxed">
+                    Fetches archived versions of this provider's website from the Internet Archive's Wayback Machine to extract historical pricing data. Each year makes one outbound API call.
+                  </p>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <label className="text-xs font-bold text-blue-900">Years back:</label>
+                    <select
+                      value={backfillYears}
+                      onChange={(e) => setBackfillYears(Number(e.target.value))}
+                      className="text-sm font-semibold border border-blue-300 rounded-lg px-3 py-1.5 bg-white outline-none focus:border-blue-500"
+                    >
+                      <option value={1}>1 year</option>
+                      <option value={2}>2 years</option>
+                      <option value={3}>3 years</option>
+                      <option value={4}>4 years</option>
+                    </select>
+                    <button
+                      onClick={handleBackfill}
+                      disabled={backfillLoading || !competitor.website}
+                      className="text-sm font-bold text-white bg-blue-600 px-5 py-2 rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {backfillLoading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Scanning...
+                        </>
+                      ) : (
+                        "Backfill Now"
+                      )}
+                    </button>
+                  </div>
+                  {!competitor.website && (
+                    <p className="text-xs text-red-600 mt-3 font-semibold">This provider has no website URL on file — cannot look up Wayback Machine snapshots.</p>
+                  )}
+                </div>
+
+                {/* Backfill Results */}
+                {backfillError && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">
+                    {backfillError}
+                  </div>
+                )}
+                {backfillResult && (
+                  <div className="space-y-2">
+                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[2px]">Backfill Results</h4>
+                    {backfillResult.map((r: any, i: number) => (
+                      <div key={i} className={`rounded-xl px-4 py-3 border ${r.status === "ok" ? "bg-green-50 border-green-200" : r.status === "no_snapshot" ? "bg-gray-50 border-gray-200" : "bg-amber-50 border-amber-200"}`}>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-bold text-gray-900">{r.year}</span>
+                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                            r.status === "ok" ? "bg-green-200 text-green-800" : r.status === "no_snapshot" ? "bg-gray-200 text-gray-600" : "bg-amber-200 text-amber-800"
+                          }`}>
+                            {r.status === "ok" ? `${r.pricesFound.length} prices found` : r.status === "no_snapshot" ? "No snapshot" : "Snapshot, no price"}
+                          </span>
+                        </div>
+                        {r.snapshotUrl && (
+                          <a href={safeUrl(r.snapshotUrl) ?? "#"} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1.5 truncate">
+                            <ExternalLink className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{r.snapshotUrl}</span>
+                          </a>
+                        )}
+                        {r.pricesFound.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {r.pricesFound.map((p: any, j: number) => (
+                              <span key={j} className="text-xs font-bold bg-white border border-gray-200 rounded-lg px-2.5 py-1">
+                                {p.courseType}: ${p.price}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Existing History Table */}
+                <div>
+                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[2px] mb-3">Stored Historical Data</h4>
+                  {historyLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <span className="h-5 w-5 animate-spin rounded-full border-2 border-blue-400 border-r-transparent" />
+                    </div>
+                  ) : !historyRows || historyRows.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                      <History className="h-8 w-8 text-gray-200 mb-2" />
+                      <p className="text-sm font-bold text-gray-400">No historical data yet</p>
+                      <p className="text-xs text-gray-300 mt-1">Run a backfill above to populate this table.</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-200">
+                            <th className="text-left text-[10px] font-black text-gray-400 uppercase tracking-wider py-2 pr-4">Year</th>
+                            <th className="text-left text-[10px] font-black text-gray-400 uppercase tracking-wider py-2 pr-4">Course</th>
+                            <th className="text-left text-[10px] font-black text-gray-400 uppercase tracking-wider py-2 pr-4">Price</th>
+                            <th className="text-left text-[10px] font-black text-gray-400 uppercase tracking-wider py-2 pr-4">Confidence</th>
+                            <th className="text-left text-[10px] font-black text-gray-400 uppercase tracking-wider py-2">Snapshot</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {historyRows.map((row: any) => (
+                            <tr key={row.id} className="border-b border-gray-50 hover:bg-gray-50">
+                              <td className="py-2.5 pr-4 font-bold text-gray-900">{row.year}</td>
+                              <td className="py-2.5 pr-4 text-gray-700">{row.courseType ?? "—"}</td>
+                              <td className="py-2.5 pr-4 font-black text-blue-600">{row.price != null ? `${row.price}` : "—"}</td>
+                              <td className="py-2.5 pr-4">{row.dataConfidence}%</td>
+                              <td className="py-2.5">
+                                <a href={safeUrl(row.snapshotUrl) ?? "#"} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1 text-xs">
+                                  <ExternalLink className="h-3 w-3" /> View
+                                </a>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
