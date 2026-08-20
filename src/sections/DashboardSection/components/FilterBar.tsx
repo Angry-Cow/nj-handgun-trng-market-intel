@@ -149,7 +149,7 @@ export const FilterBar = ({ countyFilter, typeFilter, priceFilter, onCountyChang
 
   return (
     <>
-      <div className="static md:sticky md:top-4 items-center backdrop-blur-2xl bg-white/90 shadow-[rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0.25)_0px_25px_50px_-12px] box-border caret-transparent gap-x-4 gap-y-3 md:gap-x-6 md:gap-y-6 flex flex-wrap z-[60] border border-gray-200 p-3 md:p-5 rounded-2xl md:rounded-3xl border-solid w-full">
+      <div className="static md:sticky md:top-24 items-center backdrop-blur-2xl bg-white/90 shadow-[rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0.25)_0px_25px_50px_-12px] box-border caret-transparent gap-x-4 gap-y-3 md:gap-x-6 md:gap-y-6 flex flex-wrap z-[40] border border-gray-200 p-3 md:p-5 rounded-2xl md:rounded-3xl border-solid w-full">
         <div className="text-blue-600 font-bold items-center box-border caret-transparent flex min-h-[auto] min-w-[auto] mr-4">
           <SlidersHorizontal className="h-5 w-5 mr-2" />
           <span className="box-border caret-transparent hidden min-h-0 min-w-0 md:block md:min-h-[auto] md:min-w-[auto]">
