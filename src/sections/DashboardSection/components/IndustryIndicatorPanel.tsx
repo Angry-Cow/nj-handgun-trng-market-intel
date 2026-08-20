@@ -59,6 +59,8 @@ function AddIndicatorModal({
     else if (isNaN(Number(form.indicatorValue)) || Number(form.indicatorValue) < 0)
       errs.indicatorValue = "Must be a positive number";
     if (!form.period.trim()) errs.period = "Required";
+    if (!form.sourceUrl.trim()) errs.sourceUrl = "Required — every indicator needs a verifiable source link";
+    else if (!new RegExp("^https?://", "i").test(form.sourceUrl.trim())) errs.sourceUrl = "Must be a valid URL starting with http:// or https://";
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -75,7 +77,7 @@ function AddIndicatorModal({
       period: form.period.trim(),
       periodType: form.periodType,
       sourceName: form.sourceName.trim() || undefined,
-      sourceUrl: form.sourceUrl.trim() || undefined,
+      sourceUrl: form.sourceUrl.trim(),
       notes: form.notes.trim() || undefined,
       dataConfidence: Number(form.dataConfidence),
     };
@@ -216,7 +218,7 @@ function AddIndicatorModal({
               </div>
               <div>
                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1.5">
-                  Source URL
+                  Source URL <span className="text-red-500">*</span>
                 </label>
                 <input
                   value={form.sourceUrl}
@@ -224,6 +226,12 @@ function AddIndicatorModal({
                   className={inputCls("sourceUrl")}
                   placeholder="https://..."
                 />
+                {errors.sourceUrl && (
+                  <p className="text-red-500 text-xs mt-1">{errors.sourceUrl}</p>
+                )}
+                <p className="text-[11px] text-gray-400 mt-1 italic">
+                  Confirm this link loads in a browser before saving.
+                </p>
               </div>
             </div>
 

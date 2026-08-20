@@ -393,7 +393,9 @@ _Historical prices extracted from archived snapshots via the Internet Archive's 
         const valStr = latest.unit
           ? `${Number(latest.indicatorValue).toLocaleString()} ${latest.unit}`
           : Number(latest.indicatorValue).toLocaleString();
-        const sourceStr = latest.sourceName ?? "—";
+        const sourceStr = latest.sourceUrl
+          ? `[${latest.sourceName ?? latest.sourceUrl}](${latest.sourceUrl})`
+          : (latest.sourceName ?? "—");
         const confStr = `${latest.dataConfidence ?? 90}%`;
         return `| ${name} | ${latest.period} | ${valStr} | ${sourceStr} | ${confStr} |`;
       }).join("\n");
