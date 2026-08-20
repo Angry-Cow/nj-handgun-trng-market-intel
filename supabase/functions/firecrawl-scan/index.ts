@@ -129,6 +129,29 @@ const JUNK_DOMAINS = [
   "maps.apple.com",
   "anjrpc.org", "www.anjrpc.org",
   "mapquest.com", "www.mapquest.com",
+  // News sites
+  "fox29.com", "www.fox29.com",
+  "nytimes.com", "www.nytimes.com",
+  "cbsnews.com", "www.cbsnews.com",
+  "nbcnews.com", "www.nbcnews.com",
+  "6abc.com", "www.6abc.com",
+  "nj.com", "www.nj.com",
+  "philly.com", "www.philly.com",
+  "inquirer.com", "www.inquirer.com",
+  // Legal reference sites
+  "law.justia.com",
+  "caselaw.findlaw.com",
+  "law.cornell.edu",
+  "legis.delaware.gov",
+  "law.onecle.com",
+  // Job sites
+  "ziprecruiter.com", "www.ziprecruiter.com",
+  "indeed.com", "www.indeed.com",
+  "linkedin.com/jobs",
+  // Video sites
+  "youtube.com", "www.youtube.com",
+  // Expert directories
+  "jurispro.com", "www.jurispro.com",
 ];
 
 type ProviderResult = {
@@ -167,6 +190,49 @@ const JUNK_NAME_PATTERNS = [
   /^(a tour of|tour of)\s/i,
   /^(rod gun|shotgun range|rifle range)$/i,
   /^(union county\s+)?archery range\s+at/i,
+  // Legal codes and statutes
+  /^\d+\s+\w+\s+code\s/i,
+  /^(title|chapter|section)\s+\d+/i,
+  /\bstatute\b/i,
+  /\blegislature\b/i,
+  /\blegislation\b/i,
+  // News articles
+  /^(boy|girl|man|woman|teen|police|cops|fbi|atf)\s/i,
+  /\bcharged\b/i,
+  /\bheist\b/i,
+  /\bburgl\w+/i,
+  /\brobber\w+/i,
+  /\bshooting\s+(incident|leaves|kills|injures|wounds|victim)/i,
+  /\bnews\b/i,
+  // Law firms and lawyers
+  /\blawyer\b/i,
+  /\blaw firm\b/i,
+  /\blaw offices?\b/i,
+  /\battorney\b/i,
+  /\bcriminal law\b/i,
+  /\bgun law(yers?)?\b/i,
+  /\bweapons offense/i,
+  /\bunlawful\s+(disposition|possession)\s+of\s+a\s+firearm/i,
+  // Directory and listing pages
+  /^(gun shops|shooting ranges|firearms?|gun stores?)\s+in\s/i,
+  /^(find|browse|search)\s+(trusted\s+)?ffls/i,
+  /\|\s*(master\s+ffl|henry\s+repeating\s+arms)$/i,
+  // Blog posts
+  /^where\s+can\s+i\s+/i,
+  /\bblog\b/i,
+  // Pawn shops (not firearms-specific businesses)
+  /\bpawn\s+shop/i,
+  /\bpawn\b/i,
+  // Job listings
+  /\bjobs?\b/i,
+  /\\$\\d+.*\\b(instructor|teacher|trainer)\\b/i,
+  // Video sites
+  /^check out\\b/i,
+  // Generic page titles
+  /^(about us|home|courses?(\\s+and\\s+descriptions?)?)$/i,
+  /^curriculum vitae/i,
+  /\bcertified firearms instructor jobs/i,
+  /\bhidden gem/i,
 ];
 
 const CATEGORY_LABELS = new Set([
@@ -191,6 +257,13 @@ function isJunk(result: ProviderResult): boolean {
   if (result.website) {
     for (const d of JUNK_DOMAINS) {
       if (result.website.includes(d)) return true;
+    }
+  }
+
+  // Reject if source URL is a junk domain (catches redirect/tracking links)
+  if (result.sourceUrl) {
+    for (const d of JUNK_DOMAINS) {
+      if (result.sourceUrl.includes(d)) return true;
     }
   }
 
