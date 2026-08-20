@@ -4,9 +4,53 @@
 > Magica reads this from GitHub to review progress.
 
 ## Last Updated
-2026-08-20 — Phase 6 complete
+2026-08-20 — Phase 7 complete
 
-## Section: Phase 6 — Age-Gate Handling, Nominatim Compliance & Geocode Caching
+## Section: Phase 7 — Login gate + close remaining anonymous-write exposure
+
+### Completed
+- **Section 1 (lock down RLS):** Applied a migration that drops every existing policy on all 10 tables (Competitor, CompetitorHistory, County, CourseOffering, DataCollectionRun, IndustryIndicator, MarketForecast, ResearchReport, SourceLog, StateBoundingBox) and recreates them as `TO authenticated` only. Revoked all privileges from the `anon` role on every table. Zero policies now reference `anon`. No table structure or data was changed.
+- **Section 2 (login screen gating entire app):** Added an `AuthProvider` context that manages the Supabase session state. When no session exists, the app renders only a login screen (email + password fields, branded with the NJ Handgun Market Intelligence logo). No part of the dashboard, map, competitor table, data acquisition panel, or reports is accessible without logging in.
+- **Section 3 (no public sign-up):** The login screen has no sign-up form. The only way to create credentials is through the Supabase dashboard (Authentication > Users > "Add user"). This is single-user/admin access, not open registration.
+- **Section 4 (logout control):** Added a "Log out" button in the header navigation bar, visible whenever the user is logged in. Clicking it signs the user out via `supabase.auth.signOut()` and returns them to the login screen.
+- **Section 5 (edge function key fix):** The `firecrawl-scan` and `wayback-history-scan` edge functions previously read/wrote database tables using the anon key — which now fails under the new RLS policies. Updated both functions to use the service role key (`SUPABASE_SERVICE_ROLE_KEY`) for all database access (County validation, StateBoundingBox lookup, Competitor geocode cache, CompetitorHistory inserts, Competitor website lookups).
+
+### Verified
+- [x] Build passes (`npm run build` — 12.31s, no errors)
+- [x] All 10 tables confirmed `TO authenticated` only via `get_security_posture` — zero `anon` policies remain
+- [x] Unauthenticated read on Competitor table: HTTP 401 (rejected)
+- [x] Unauthenticated write on Competitor table: HTTP 401 — "permission denied for table Competitor" (rejected)
+- [x] Data intact: 252 competitor records still present in the database
+- [x] Both edge functions redeployed successfully with service role key
+- [x] Login screen renders with email/password fields and branding
+- [x] Logout button visible in header
+
+### Not Yet Verified (requires user-created credentials)
+- [ ] Authenticated read/write through the UI — requires the user to create an account in the Supabase dashboard first (Authentication > Users > "Add user"), then log in and test viewing the competitor table and editing a record
+- [ ] Full dashboard loads after login — same dependency on credentials being created
+
+### How to create your login credentials
+1. Go to your Supabase project dashboard
+2. Navigate to Authentication > Users
+3. Click "Add user" and enter your email + password
+4. Return to the app and sign in with those credentials
+
+### Files Changed
+- `supabase/migrations/lockdown_rls_authenticated_only` — drops all anon policies, recreates as authenticated-only, revokes anon privileges (applied via MCP)
+- `src/lib/auth.tsx` — new AuthProvider context with session management, signIn, signOut
+- `src/sections/LoginScreen/index.tsx` — new login screen component
+- `src/App.tsx` — wraps app in AuthProvider, gates entire app behind login
+- `src/sections/Header/components/NavActions.tsx` — added logout button
+- `src/sections/Header/components/HeaderNav.tsx` — renders NavActions (logout) in header
+- `supabase/functions/firecrawl-scan/index.ts` — switched DB reads from anon key to service role key
+- `supabase/functions/wayback-history-scan/index.ts` — switched DB reads/writes from anon key to service role key
+
+### Next Up
+_Awaiting next phase from Magica in `workspace/BUILD_PLAN.md`._
+
+---
+
+## Previous: Phase 6 — Age-Gate Handling, Nominatim Compliance & Geocode Caching
 
 ### Completed
 - **Section 1 (age-gate clearing script):** Added an `AGE_GATE_SCRIPT` constant that runs inside scraped pages via Firecrawl's `executeJavascript` action. The script fills date-of-birth inputs (`<input type="date">`, text fields, month/day/year `<select>` dropdowns), checks age-confirmation checkboxes, and clicks Continue/Submit/Enter-style buttons. Uses birthdate 06/23/1964. Each step is independently try/caught so one missing element doesn't abort the rest.

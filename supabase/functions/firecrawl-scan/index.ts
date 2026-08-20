@@ -9,6 +9,7 @@ const FIRECRAWL_BASE = "https://api.firecrawl.dev/v2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 // Outbound calls get a hard timeout so a slow upstream cannot hang the request.
 const UPSTREAM_TIMEOUT_MS = 25_000;
@@ -55,7 +56,7 @@ function rateLimited(ip: string): boolean {
 
 // ─── Confirm county/state exist in the County reference table ─────────
 async function isKnownPlace(county: string, state: string): Promise<boolean> {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return false;
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return false;
   try {
     const url =
       `${SUPABASE_URL}/rest/v1/County?select=county&limit=1` +
@@ -63,8 +64,8 @@ async function isKnownPlace(county: string, state: string): Promise<boolean> {
       `&state=eq.${encodeURIComponent(state)}`;
     const res = await fetch(url, {
       headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
       },
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
@@ -98,15 +99,15 @@ const STATE_ABBR: Record<string, string> = {
 async function getStateBoundingBox(
   state: string,
 ): Promise<[number, number, number, number] | null> {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
   try {
     const url =
       `${SUPABASE_URL}/rest/v1/StateBoundingBox?select=west,north,east,south` +
       `&state=eq.${encodeURIComponent(state)}&limit=1`;
     const res = await fetch(url, {
       headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
       },
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
@@ -1001,15 +1002,15 @@ Deno.serve(async (req: Request) => {
     // Before calling Nominatim, check if we already have coordinates for this
     // business name in this county from a previous scan.
     const cachedGeocodes = new Map<string, { lat: number; lon: number; address: string }>();
-    if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+    if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
       try {
         const geoUrl =
           `${SUPABASE_URL}/rest/v1/Competitor?select=facilityName,county,latitude,longitude,address` +
           `&latitude=not.is.null&latitude=neq.0`;
         const geoRes = await fetch(geoUrl, {
           headers: {
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            apikey: SUPABASE_SERVICE_ROLE_KEY,
+            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
           },
           signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
         });

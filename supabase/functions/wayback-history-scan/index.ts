@@ -8,6 +8,7 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 const UPSTREAM_TIMEOUT_MS = 20_000;
 const MAX_YEARS = 4;
@@ -122,15 +123,15 @@ async function fetchArchivedPage(
 async function insertHistoryRows(
   rows: { competitorId: string; year: number; courseType: string; price: number; snapshotUrl: string; dataConfidence: number }[],
 ): Promise<boolean> {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || rows.length === 0) return false;
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || rows.length === 0) return false;
 
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/CompetitorHistory`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
         Prefer: "return=representation",
       },
       body: JSON.stringify(rows),
@@ -194,8 +195,8 @@ Deno.serve(async (req: Request) => {
         `${SUPABASE_URL}/rest/v1/Competitor?id=eq.${encodeURIComponent(competitorId)}&select=website,facilityName`,
         {
           headers: {
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            apikey: SUPABASE_SERVICE_ROLE_KEY,
+            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
           },
           signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
         },
