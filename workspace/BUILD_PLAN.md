@@ -3,101 +3,128 @@
 > This file is written by the external model (Magica) and read by Bolt.
 > Bolt reads this at the start of each work session.
 
-## Active Plan — Phase 5: Make state/county expansion a data change, not a code change
+## Active Plan — Phase 6: Age-gate handling + Nominatim/map hardening
 
-_Context: I plan to keep adding counties and states over time (currently NJ + PA, 15
-counties). Adding a new state or county should be something done from the existing
-`County` table / Data Acquisition panel, without needing a code change each time, other
-than the one-time addition of that state's geocoding bounding box (added in Phase 1's
-`STATE_BOUNDING_BOX` map)._
+_Context: Many gun retailer/range sites sit behind an age-verification interstitial. Today
+the scraper has no `actions` in its Firecrawl calls, so when it hits an age gate it just
+captures the gate page itself (not the real content), and the phone/price/service
+extraction regexes silently find nothing — producing a thin, low-confidence record that
+looks like "just didn't have much data" rather than "was blocked by an age gate." There is
+no universal fix (age gates are built too differently across sites — single button, three
+month/day/year dropdowns, a date input, custom JS widgets), so this phase does the best
+realistic single-script approach plus an honest fallback for whatever it can't clear.
+Real birthdate to use for any age-gate field that requires one: **June 23, 1964**
+(06/23/1964)._
 
-### Section 1: Confirm the scraper takes county/state purely as data
-**Prompt:** Confirm (and fix if not already true) that `searchOverpass()` and
-`geocodeNominatim()` in `supabase/functions/firecrawl-scan/index.ts` take `county`/`state`
-purely as parameters — no part of either function should assume New Jersey or Pennsylvania
-specifically outside of the `STATE_BOUNDING_BOX` and `STATE_ABBR` maps added in Phase 1.
+### Section 1: Add a generic age-gate-clearing script to firecrawlScrape()
+**Prompt:** In `supabase/functions/firecrawl-scan/index.ts`, add an `actions` array to the
+Firecrawl `/scrape` call inside `firecrawlScrape()` (the function that scrapes each
+provider's own website). Use an `executeJavascript` action containing one script that:
+- Looks for `input[type="date"]` fields and sets their value to `1964-06-23` (ISO format),
+  dispatching `input` and `change` events so any framework listening picks up the change.
+- Looks for common birthdate `<select>` patterns: elements whose `name`, `id`, or
+  `aria-label` (case-insensitive) contain "month", "day", "year", "dob", or "birth". Set
+  month selects to June/6, day selects to 23, year selects to 1964, matching against
+  either numeric values or text option labels, and dispatch `change` events.
+- Looks for free-text birthdate inputs (`name`/`id`/placeholder containing "dob" or
+  "birth") and sets their value to `06/23/1964`, dispatching `input`/`change`.
+- Looks for a simple age-confirmation checkbox (`input[type="checkbox"]` whose nearby
+  label text contains "21" or "18" or "of age" or "years old") and checks it.
+- After attempting the above, looks for a button/link whose visible text matches
+  "enter", "continue", "submit", "yes", "confirm", "i am", or "agree" (case-insensitive)
+  and clicks the first match.
+- Wrap each individual step in its own try/catch inside the script so one missing element
+  doesn't stop the rest of the script from running.
+- Add a short `wait` action (500-1000ms) before and after this script to let any resulting
+  page navigation/render settle.
 **Done when:**
-- [ ] No hardcoded state-specific logic remains outside the two lookup maps
-- [ ] A state not yet in `STATE_BOUNDING_BOX`/`STATE_ABBR` still runs without crashing
-      (falls back to no bounding box / no ISO code, per Phase 1's fallback behavior)
+- [ ] The `actions` array is added to the `firecrawlScrape()` Firecrawl request
+- [ ] The script handles all four field-shape cases above (date input, dropdowns,
+      free-text, checkbox) without crashing if any are absent
+- [ ] A generic "click a Continue/Enter/Submit/Confirm-like button" step runs after
+      attempting to fill any fields
 
-### Section 2: Make the Data Acquisition panel read states/counties from the database
-**Prompt:** In `DataCollectionPanel.tsx`, the state/county checkboxes are currently
-hard-coded (the two state names, and the 15 county names). Change this to read the
-available states/counties from the `County` table via a live query instead of a hard-coded
-list, so adding a row to `County` (which the app already supports doing) is enough to make
-a new county selectable for scanning, without a redeploy.
+### Section 2: Detect and flag pages that are still age-gated afterward
+**Prompt:** After the action sequence runs and the page content is captured, check the
+returned markdown/HTML for common age-gate phrases (e.g. "verify your age", "you must be
+21", "must be at least 18", "confirm your date of birth", "age verification"). If found,
+do not silently record a generic low-confidence result — instead set `needsVerification:
+true` and add a clear note (e.g. in the existing notes/servicesOffered handling, or a new
+field if easier) indicating "likely blocked by age gate" so this is visibly different from
+"no data available for other reasons" in the dashboard.
 **Done when:**
-- [ ] State/county checkboxes are populated from the `County` table at runtime
-- [ ] Adding a test row directly to `County` makes it appear as a selectable option without
-      any code change or redeploy
-- [ ] Existing 15 counties across NJ/PA still display and function identically to before
+- [ ] A page still showing age-gate language after the action sequence is explicitly
+      flagged as age-gate-blocked, not just scored as generic low confidence
+- [ ] This flag/note is visible somewhere in the Competitor table or detail panel, not
+      just buried in logs
 
-### Section 3: Add an "Add State/County" admin control
-**Prompt:** Add a small "Add State/County" control in the Data Acquisition section that
-lets me add a new `County` row directly from the UI. If the state is new (not yet in
-`STATE_BOUNDING_BOX`), prompt me for its bounding box (four numbers: west, north, east,
-south) so it can be added to that map — since that one piece genuinely needs a real,
-correct value per state and should not silently default to "no bounding box" once several
-states are in use (a missing bounding box is fine for exactly one or two states while
-testing, but as more states are added, an unbounded geocode search increases the risk of
-cross-state mismatches).
+### Section 3: Nominatim etiquette — identify the app properly
+**Prompt:** Update the Nominatim request headers in `geocodeNominatim()` from the current
+generic `"User-Agent": "FirearmsIntelDashboard/1.0"` to something that identifies the app
+with a real contact point, per Nominatim's usage policy
+(https://operations.osmfoundation.org/policies/nominatim/), which asks for a valid
+User-Agent/Referer identifying the application. Use a format like
+`"NJHandgunMarketIntel/1.0 (contact: <site URL or email I give you>)"` — ask me for the
+contact value if you don't have one to use.
 **Done when:**
-- [ ] I can add a new County row from the UI without touching code
-- [ ] Adding a new state prompts for its bounding box and stores it somewhere the edge
-      function can read (e.g. a new `StateBoundingBox` table, or an extension of `County`)
-- [ ] Existing NJ/PA bounding boxes are unaffected by this change
+- [ ] Nominatim requests send a User-Agent that identifies the app with a real contact
+      point
+- [ ] No other Nominatim request behavior changes
 
-### Section 4: Verify the known-place validation still works correctly
-**Prompt:** Double check that `PLACE_NAME_RE` validation and `isKnownPlace()` in
-`firecrawl-scan/index.ts` still work correctly when new states/counties are added via the
-UI (Section 3) rather than via a migration — they should, since both check against the
-`County` table, but confirm this with a real test and fix any edge case found.
+### Section 4: Geocode caching to reduce redundant Nominatim calls
+**Prompt:** Before calling `geocodeNominatim()` for a given business name/county/state,
+check whether a `Competitor` row with the same normalized name in that county already has
+non-zero `latitude`/`longitude` from a previous scan, and reuse it instead of calling
+Nominatim again. This reduces redundant calls to the free service on repeat scans of the
+same counties over time.
 **Done when:**
-- [ ] A county added via the new UI control passes `isKnownPlace()` validation
-- [ ] A scan for that county runs successfully end-to-end
+- [ ] Re-scanning a county with already-geocoded providers does not re-call Nominatim for
+      those same providers
+- [ ] New/ungeocoded providers still get geocoded normally
 
-### Section 5: Verify with a real new county added end-to-end
-**Prompt:** After Sections 1-4 are complete, add one real new county from a state not
-currently in the system (pick any real US county/state combination), provide its state's
-real bounding box (look up real lat/lon bounds for that state), and run a real scan for it
-from the live dashboard. Report in STATUS.md: which state/county was added, the bounding
-box values used and where you got them, and the actual scan results (records
-found/created, and whether any got real coordinates).
+### Section 5: Verify with a real test against a known age-gated site
+**Prompt:** After Sections 1-4 are complete, find a real gun retailer or range website
+that currently has (or is known to have) an age-verification gate, and run a real scan
+that includes it (via the live dashboard, not just the function in isolation). Report in
+STATUS.md: which site was tested, what the age gate looked like (button, dropdowns, date
+field, etc.), whether the script successfully cleared it and captured real data, or
+whether it was correctly flagged as age-gate-blocked instead. If you can't find a
+naturally-occurring age-gated site in the current data, say so plainly rather than
+fabricating a test result — this is a best-effort feature, not a guaranteed one.
 **Done when:**
-- [ ] A genuinely new state/county was added through the UI (not seeded/faked)
-- [ ] A real scan ran successfully for it and returned real results
-- [ ] STATUS.md reports the real bounding box source and real scan output
+- [ ] A real test was attempted against a real age-gated (or suspected age-gated) site
+- [ ] STATUS.md honestly reports what happened — cleared successfully, or correctly
+      flagged as blocked, or "no age-gated site could be identified to test against"
+- [ ] Nominatim User-Agent change and geocode caching are also verified with a real scan
 
 ---
 
 ## Completed Sections
 
+### Phase 5: Make state/county expansion a data change, not a code change — COMPLETE (Aug 20, 2026)
+Replaced hardcoded `STATE_BOUNDING_BOX` map with a database-backed `StateBoundingBox`
+table; fixed a leftover hardcoded "NJ" in `searchQuery2`; made the Data Collection panel
+read states/counties from the `County` table at runtime; added an "Add State or County"
+UI control. Verified end-to-end by the user directly: added New Castle County, Delaware
+(a genuinely new state, not previously in the system) with a real, looked-up Delaware
+bounding box, and ran a real scan that created 31 new `Competitor` rows — confirmed
+directly in the database. Also fixed scraper junk-filtering to exclude news sites and law
+firm/law office results, confirmed in the deployed code.
+
 ### Phase 4: Free industry-outlook indicators (no paid subscriptions) — COMPLETE (Aug 20, 2026)
-Added `IndustryIndicator` table (with `sourceUrl` enforced NOT NULL at the database level)
-and a manual-entry panel for the four free sources researched (FBI NICS, BLS OEWS, Census
-CBP, IBISWorld free preview). Added an "Industry Outlook" section to generated reports that
-cites each indicator's source as a real clickable markdown link. One round of correction
-was needed: the first test indicator's sourceUrl was a dead link (404); it was replaced
-with a verified-working source (NJ Attorney General's Permit to Carry Dashboard,
-https://www.njoag.gov/permittocarry/ — confirmed live by me directly), and the report
-generator was fixed to actually include the link, not just the source name. Verified by
-generating a fresh report directly via the deployed edge function and confirming the real
-markdown link appears in the stored report content.
+Added `IndustryIndicator` table (`sourceUrl` enforced NOT NULL) and a manual-entry panel.
+Added an "Industry Outlook" report section citing sources as real clickable links. One
+correction was needed and verified: a dead source link was replaced with a real, working
+one (NJ Attorney General's Permit to Carry Dashboard), confirmed live by direct fetch.
 
 ### Phase 3: Prior-year (3–4 year) historical data via the Wayback Machine — COMPLETE (Aug 19-20, 2026)
-Added `CompetitorHistory` table and `wayback-history-scan` edge function. Added a
-"Backfill Historical Pricing" control to the Competitor detail panel and a Year-over-Year
-Pricing section to generated reports. Verified: real backfill for Gun For Hire
-(gunforhire.com) returned real snapshot URLs and $99 prices for 2023 and 2024. Confirmed
-live on the public site.
+Added `CompetitorHistory` table and `wayback-history-scan` edge function. Verified with a
+real backfill returning real snapshot URLs and prices for a real competitor.
 
 ### Phase 2: Build the missing "Generate Report" feature — COMPLETE (Aug 19, 2026)
-Added the `generate-report` Supabase Edge Function and a "Generate New Report" button;
-rewrote the report display to show up to 5 most recent reports. Verified and confirmed
-live on the public site.
+Added the `generate-report` Supabase Edge Function and report history UI. Verified with a
+real generation confirmed live on the public site.
 
 ### Phase 1: Fix cross-state geocoding + Overpass state-matching bugs — COMPLETE (Aug 19, 2026)
-Fixed the NJ-only bounding box in `geocodeNominatim()` and `searchOverpass()`
-state-matching to use ISO 3166-2 codes. Verified with a live Bucks County, PA scan.
-Confirmed live on the public site.
+Fixed the NJ-only bounding box and Overpass state-matching. Verified with a live Bucks
+County, PA scan. Confirmed live on the public site.
