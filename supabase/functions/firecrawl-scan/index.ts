@@ -93,11 +93,32 @@ const STATE_ABBR: Record<string, string> = {
   Wisconsin: "WI", Wyoming: "WY", "District of Columbia": "DC", "Puerto Rico": "PR",
 };
 
-// Bounding boxes for Nominatim viewbox filtering: [west, north, east, south]
-const STATE_BOUNDING_BOX: Record<string, [number, number, number, number]> = {
-  "New Jersey": [-75.6, 41.4, -73.9, 38.9],
-  Pennsylvania: [-80.5, 42.3, -74.7, 39.7],
-};
+// ─── Fetch state bounding box from the database ──────────────────────
+// Returns [west, north, east, south] or null if the state has no entry.
+async function getStateBoundingBox(
+  state: string,
+): Promise<[number, number, number, number] | null> {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+  try {
+    const url =
+      `${SUPABASE_URL}/rest/v1/StateBoundingBox?select=west,north,east,south` +
+      `&state=eq.${encodeURIComponent(state)}&limit=1`;
+    const res = await fetch(url, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    const rows = await res.json();
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    const r = rows[0];
+    return [r.west, r.north, r.east, r.south];
+  } catch {
+    return null;
+  }
+}
 
 const REDDIT_DOMAINS = ["reddit.com", "www.reddit.com", "old.reddit.com"];
 const JUNK_DOMAINS = [
@@ -392,12 +413,12 @@ async function geocodeNominatim(
   businessName: string,
   county: string,
   state: string,
+  bbox?: [number, number, number, number] | null,
 ): Promise<{ lat: number; lon: number; address: string } | null> {
   const stateAbbr = STATE_ABBR[state] ?? state;
   // Include state in the query to avoid geocoding to wrong states
   const query = `${businessName} ${stateAbbr}`;
 
-  const bbox = STATE_BOUNDING_BOX[state];
   const viewboxParam = bbox
     ? `&viewbox=${bbox[0]},${bbox[1]},${bbox[2]},${bbox[3]}&bounded=1`
     : "";
@@ -717,9 +738,12 @@ Deno.serve(async (req: Request) => {
       retailer: "gun store firearms dealer",
     };
 
+    // Fetch the state bounding box from the database for Nominatim viewbox filtering
+    const stateBbox = await getStateBoundingBox(state);
+
     // Use multiple search queries to cast a wider net
     const searchQuery1 = `${typeLabel[providerType] ?? providerType} ${county} County ${state}`;
-    const searchQuery2 = `${typeLabel[providerType] ?? providerType} ${county} County NJ site:.com`;
+    const searchQuery2 = `${typeLabel[providerType] ?? providerType} ${county} County ${state} site:.com`;
 
     const [fcResult1, fcResult2, osmResult] = await Promise.all([
       firecrawlSearch(searchQuery1),
@@ -768,7 +792,7 @@ Deno.serve(async (req: Request) => {
       .slice(0, MAX_GEOCODES_PER_REQUEST);
     for (const r of needsGeo) {
       if (r.lat !== 0) continue; // might have been set by scrape
-      const geo = await geocodeNominatim(r.name, county, state);
+      const geo = await geocodeNominatim(r.name, county, state, stateBbox);
       if (geo) {
         r.lat = geo.lat;
         r.lon = geo.lon;

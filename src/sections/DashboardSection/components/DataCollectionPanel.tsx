@@ -97,6 +97,11 @@ export const DataCollectionPanel = () => {
     },
   );
 
+  // Fetch existing state bounding boxes from DB
+  const { data: bboxRecords } = useQuery("StateBoundingBox");
+  const { create: createCounty } = useMutation("County");
+  const { create: createBBox } = useMutation("StateBoundingBox");
+
   // Refetch runs helper - works even before runs are loaded
   const refetchRuns = useCallback(() => {
     runsRefetch();
@@ -110,6 +115,19 @@ export const DataCollectionPanel = () => {
   const [runningId, setRunningId] = useState<string | null>(null);
   const [runProgress, setRunProgress] = useState<Record<string, string>>({});
   const abortRef = useRef<boolean>(false);
+
+  // ── Add State/County panel state ──
+  const [expandGeo, setExpandGeo] = useState(false);
+  const [geoMode, setGeoMode] = useState<"county" | "state">("county");
+  const [newCounty, setNewCounty] = useState("");
+  const [newCountyState, setNewCountyState] = useState("");
+  const [newStateName, setNewStateName] = useState("");
+  const [bboxWest, setBboxWest] = useState("");
+  const [bboxNorth, setBboxNorth] = useState("");
+  const [bboxEast, setBboxEast] = useState("");
+  const [bboxSouth, setBboxSouth] = useState("");
+  const [geoError, setGeoError] = useState("");
+  const [geoSuccess, setGeoSuccess] = useState("");
 
   // Derive unique sorted states from county records
   const allStates = useMemo(() => {
@@ -465,6 +483,87 @@ export const DataCollectionPanel = () => {
       setConfirmDelete(null);
     } catch (err) {
       console.error("Failed to delete run:", err);
+    }
+  };
+
+  // ── Add County handler ──
+  const handleAddCounty = async () => {
+    setGeoError("");
+    setGeoSuccess("");
+    if (!newCounty.trim()) {
+      setGeoError("County name is required.");
+      return;
+    }
+    if (!newCountyState.trim()) {
+      setGeoError("State is required.");
+      return;
+    }
+    const exists = (countyRecords ?? []).some(
+      (c) =>
+        c.county.toLowerCase() === newCounty.trim().toLowerCase() &&
+        c.state.toLowerCase() === newCountyState.trim().toLowerCase(),
+    );
+    if (exists) {
+      setGeoError("This county already exists for that state.");
+      return;
+    }
+    try {
+      await createCounty({
+        county: newCounty.trim(),
+        state: newCountyState.trim(),
+      });
+      emitRefresh("County");
+      setGeoSuccess(`Added ${newCounty.trim()} County, ${newCountyState.trim()}.`);
+      setNewCounty("");
+    } catch (err) {
+      setGeoError("Failed to add county. Please try again.");
+    }
+  };
+
+  // ── Add State + Bounding Box handler ──
+  const handleAddState = async () => {
+    setGeoError("");
+    setGeoSuccess("");
+    if (!newStateName.trim()) {
+      setGeoError("State name is required.");
+      return;
+    }
+    const w = parseFloat(bboxWest);
+    const n = parseFloat(bboxNorth);
+    const e = parseFloat(bboxEast);
+    const s = parseFloat(bboxSouth);
+    if (isNaN(w) || isNaN(n) || isNaN(e) || isNaN(s)) {
+      setGeoError("All four bounding box values must be valid numbers.");
+      return;
+    }
+    if (w >= e || s >= n) {
+      setGeoError("West must be < East and South must be < North.");
+      return;
+    }
+    const exists = (bboxRecords ?? []).some(
+      (b) => b.state.toLowerCase() === newStateName.trim().toLowerCase(),
+    );
+    if (exists) {
+      setGeoError("A bounding box already exists for this state.");
+      return;
+    }
+    try {
+      await createBBox({
+        state: newStateName.trim(),
+        west: w,
+        north: n,
+        east: e,
+        south: s,
+      });
+      emitRefresh("StateBoundingBox");
+      setGeoSuccess(`Added bounding box for ${newStateName.trim()}.`);
+      setNewStateName("");
+      setBboxWest("");
+      setBboxNorth("");
+      setBboxEast("");
+      setBboxSouth("");
+    } catch (err) {
+      setGeoError("Failed to add state bounding box. Please try again.");
     }
   };
 
@@ -916,6 +1015,212 @@ export const DataCollectionPanel = () => {
                 Cancel
               </button>
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* Add State / County card */}
+      <div className="bg-white border border-gray-100 rounded-3xl shadow-[rgba(0,0,0,0.05)_0px_1px_3px] overflow-hidden mb-6">
+        <button
+          type="button"
+          onClick={() => setExpandGeo((v) => !v)}
+          className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50/60 transition-colors text-left"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center h-9 w-9 bg-emerald-600 rounded-xl shrink-0">
+              <svg
+                className="h-4 w-4 text-white"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M19 14l-7 7m0 0l-7-7m7 7V3"
+                />
+              </svg>
+            </div>
+            <div>
+              <p className="font-bold text-gray-800 text-sm">
+                Add State or County
+              </p>
+              <p className="text-xs text-gray-400 font-medium">
+                Expand coverage to new states and counties without a code change
+              </p>
+            </div>
+          </div>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${expandGeo ? "rotate-180" : ""}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M19 9l-7 7-7-7"
+            />
+          </svg>
+        </button>
+
+        {expandGeo && (
+          <div className="border-t border-gray-100 px-6 pb-6 pt-5 space-y-5">
+            {/* Mode toggle */}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setGeoMode("county"); setGeoError(""); setGeoSuccess(""); }}
+                className={`text-xs font-bold px-4 py-2 rounded-xl border transition-colors ${
+                  geoMode === "county"
+                    ? "bg-blue-600 text-white border-blue-600"
+                    : "bg-slate-50 text-gray-600 border-gray-200 hover:border-blue-300"
+                }`}
+              >
+                Add County
+              </button>
+              <button
+                type="button"
+                onClick={() => { setGeoMode("state"); setGeoError(""); setGeoSuccess(""); }}
+                className={`text-xs font-bold px-4 py-2 rounded-xl border transition-colors ${
+                  geoMode === "state"
+                    ? "bg-emerald-600 text-white border-emerald-600"
+                    : "bg-slate-50 text-gray-600 border-gray-200 hover:border-emerald-300"
+                }`}
+              >
+                Add State + Bounding Box
+              </button>
+            </div>
+
+            {geoMode === "county" ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-black text-gray-500 tracking-widest uppercase block mb-2">
+                      County Name
+                    </label>
+                    <input
+                      value={newCounty}
+                      onChange={(e) => setNewCounty(e.target.value)}
+                      className="text-sm bg-slate-50 border border-gray-200 rounded-xl px-4 py-2.5 w-full outline-none focus:outline-blue-400 focus:outline-2"
+                      placeholder="e.g. Essex"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-black text-gray-500 tracking-widest uppercase block mb-2">
+                      State
+                    </label>
+                    <select
+                      value={newCountyState}
+                      onChange={(e) => setNewCountyState(e.target.value)}
+                      className="text-sm bg-slate-50 border border-gray-200 rounded-xl px-4 py-2.5 w-full outline-none focus:outline-blue-400 focus:outline-2 text-gray-700"
+                    >
+                      <option value="">Select a state…</option>
+                      {allStates.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                {geoError && <p className="text-xs text-red-500 font-semibold">{geoError}</p>}
+                {geoSuccess && <p className="text-xs text-green-600 font-semibold">{geoSuccess}</p>}
+                <button
+                  type="button"
+                  onClick={handleAddCounty}
+                  className="flex items-center gap-2 text-sm font-bold bg-blue-600 text-white px-5 py-2.5 rounded-xl hover:bg-blue-700 transition-colors"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add County
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-black text-gray-500 tracking-widest uppercase block mb-2">
+                    State Name
+                  </label>
+                  <input
+                    value={newStateName}
+                    onChange={(e) => setNewStateName(e.target.value)}
+                    className="text-sm bg-slate-50 border border-gray-200 rounded-xl px-4 py-2.5 w-full outline-none focus:outline-blue-400 focus:outline-2"
+                    placeholder="e.g. New York"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-black text-gray-500 tracking-widest uppercase block mb-2">
+                    Bounding Box Coordinates
+                  </label>
+                  <p className="text-[11px] text-gray-400 italic mb-3">
+                    Enter the west, north, east, and south boundaries of the state in decimal degrees.
+                    These are used to constrain geocoding results. You can find them at{" "}
+                    <a href="https://boundingbox.klokantech.com/" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">boundingbox.klokantech.com</a>.
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div>
+                      <label className="text-[11px] font-bold text-gray-400 uppercase block mb-1">West (lon)</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={bboxWest}
+                        onChange={(e) => setBboxWest(e.target.value)}
+                        className="text-sm bg-slate-50 border border-gray-200 rounded-xl px-3 py-2 w-full outline-none focus:outline-emerald-400 focus:outline-2"
+                        placeholder="e.g. -80.5"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-gray-400 uppercase block mb-1">North (lat)</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={bboxNorth}
+                        onChange={(e) => setBboxNorth(e.target.value)}
+                        className="text-sm bg-slate-50 border border-gray-200 rounded-xl px-3 py-2 w-full outline-none focus:outline-emerald-400 focus:outline-2"
+                        placeholder="e.g. 42.3"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-gray-400 uppercase block mb-1">East (lon)</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={bboxEast}
+                        onChange={(e) => setBboxEast(e.target.value)}
+                        className="text-sm bg-slate-50 border border-gray-200 rounded-xl px-3 py-2 w-full outline-none focus:outline-emerald-400 focus:outline-2"
+                        placeholder="e.g. -74.7"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-gray-400 uppercase block mb-1">South (lat)</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={bboxSouth}
+                        onChange={(e) => setBboxSouth(e.target.value)}
+                        className="text-sm bg-slate-50 border border-gray-200 rounded-xl px-3 py-2 w-full outline-none focus:outline-emerald-400 focus:outline-2"
+                        placeholder="e.g. 39.7"
+                      />
+                    </div>
+                  </div>
+                </div>
+                {geoError && <p className="text-xs text-red-500 font-semibold">{geoError}</p>}
+                {geoSuccess && <p className="text-xs text-green-600 font-semibold">{geoSuccess}</p>}
+                <button
+                  type="button"
+                  onClick={handleAddState}
+                  className="flex items-center gap-2 text-sm font-bold bg-emerald-600 text-white px-5 py-2.5 rounded-xl hover:bg-emerald-700 transition-colors"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add State
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

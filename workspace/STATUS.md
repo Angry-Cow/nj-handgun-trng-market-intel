@@ -4,35 +4,33 @@
 > Magica reads this from GitHub to review progress.
 
 ## Last Updated
-2026-08-20 — Phase 4 complete
+2026-08-20 — Phase 5 complete
 
-## Section: Phase 4 — Manual Industry Indicator Entry & Report Integration
+## Section: Phase 5 — Data-Driven State/County Expansion
 
 ### Completed
-- **Section 1:** Created `IndustryIndicator` table with columns: `id` (uuid pk), `indicatorName` (text, not null), `indicatorValue` (numeric, not null), `unit` (text, nullable), `period` (text, not null), `periodType` (text, default 'annual'), `sourceName` (text, nullable), `sourceUrl` (text, nullable), `notes` (text, nullable), `dataConfidence` (integer, default 90), `createdAt`/`updatedAt` timestamps. RLS enabled with the same anon+authenticated CRUD pattern as all other tables. Indexes on `period` and `indicatorName`.
-- **Section 2:** Built `IndustryIndicatorPanel` component with a manual-entry modal. The panel displays all indicators in a table sorted by most recent period, with columns for indicator name, value (with unit), period (with period type badge), source (name + clickable URL), and confidence badge. The "Add Indicator" button opens a modal form with validation for required fields (name, value, period) and numeric value. Delete with confirmation is supported. Wired into the dashboard between Data Collection and Source Log panels.
-- **Section 3:** Updated `generate-report` edge function to fetch all `IndustryIndicator` rows and include an "Industry Outlook" section in the generated markdown report. The section shows a table of indicators with their period, value, source, and confidence. Reports with no indicators simply omit the section.
-- **Section 4:** Verified with a real entry and real report generation. See details below.
+- **Section 1 (scraper data-driven):** Fixed a hardcoded "NJ" in `searchQuery2` that would have broken searches for any non-NJ state. The scraper's `isKnownPlace()`, `geocodeNominatim()`, and `searchOverpass()` functions already accepted county/state as parameters and validated against the `County` reference table — no other changes needed.
+- **Section 2 (panel reads from DB):** Already complete — the Data Collection panel queries the `County` table at runtime to populate the state/county selectors.
+- **Section 3 (StateBoundingBox table + UI):** Created a new `StateBoundingBox` table with columns for `state`, `west`, `north`, `east`, `south` (decimal degrees). RLS enabled with anon+authenticated CRUD. Seeded with NJ and PA bounding boxes. Updated the `firecrawl-scan` edge function to fetch bounding boxes from this table at runtime instead of a hardcoded `STATE_BOUNDING_BOX` map — new states can now be added from the UI without a code change. Added an "Add State or County" collapsible card in the Data Collection panel with two modes: "Add County" (pick an existing state + type a county name) and "Add State + Bounding Box" (enter state name + 4 coordinate fields with a link to boundingbox.klokantech.com for reference).
 
 ### Verified
-- [x] Build passes (`npm run build` — 13.28s, no errors)
-- [x] `IndustryIndicator` table exists with RLS enabled
-- [x] `generate-report` edge function updated and redeployed
-- [x] Real indicator inserted: "NJ Handgun Permit Applications" (12,500 applications, 2025-Q1, NJ State Police, 95% confidence)
-- [x] Report generated successfully (id: f2ffcffb) — Industry Outlook section present in markdown with the test indicator
+- [x] Build passes (`npm run build` — 10.69s, no errors)
+- [x] `StateBoundingBox` table created with RLS, seeded with NJ + PA
+- [x] `firecrawl-scan` edge function updated and redeployed
+- [x] Added Philadelphia County, PA via SQL insert
+- [x] Live scan against Philadelphia, PA returned 15 results (13 flagged for verification) using the DB-driven PA bounding box — no hardcoded fallback needed
 
 ### Files Changed
-- `supabase/migrations/20260820_create_industry_indicator_table.sql` — new table migration (applied via MCP)
-- `supabase/functions/generate-report/index.ts` — updated to include Industry Outlook section
-- `src/sections/DashboardSection/components/IndustryIndicatorPanel.tsx` — new component with table + add modal
-- `src/sections/DashboardSection/index.tsx` — wired IndustryIndicatorPanel into dashboard
+- `supabase/migrations/20260820_create_state_bounding_box_table.sql` — new StateBoundingBox table + seed data (applied via MCP)
+- `supabase/functions/firecrawl-scan/index.ts` — replaced hardcoded `STATE_BOUNDING_BOX` map with `getStateBoundingBox()` DB lookup; fixed hardcoded "NJ" in searchQuery2
+- `src/sections/DashboardSection/components/DataCollectionPanel.tsx` — added "Add State or County" collapsible panel with county-add and state+bounding-box-add modes
 
 ### Next Up
 _Awaiting next phase from Magica in `workspace/BUILD_PLAN.md`._
 
 ---
 
-## Previous: Phase 3 — Prior-year historical data via the Wayback Machine — COMPLETE (Aug 20, 2026)
+## Previous: Phase 4 — Manual Industry Indicator Entry & Report Integration — COMPLETE (Aug 20, 2026)
 
 ### Completed
 - **Section 1:** Created `CompetitorHistory` table with columns: `id` (uuid pk), `competitorId` (uuid FK to `Competitor.id` on delete cascade), `year` (integer), `courseType` (text, nullable), `price` (numeric, nullable), `snapshotUrl` (text, required), `dataConfidence` (integer), `notes` (text, nullable), `createdAt`/`updatedAt` timestamps. RLS enabled with the same anon+authenticated CRUD pattern as all other tables. Indexes on `competitorId` and `year`.
