@@ -431,13 +431,30 @@ export const AddCompetitorModal = ({ onClose, onCreate, onUpdate, editData, isMu
           </button>
 
           {step === 1 ? (
-            <button
-              type="button"
-              onClick={handleNext}
-              className="text-sm font-bold text-white bg-blue-600 px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors"
-            >
-              Next: Pricing & Details →
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={isMutating}
+                className="text-sm font-bold text-blue-600 bg-white border border-blue-200 px-6 py-3 rounded-xl hover:bg-blue-50 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {isMutating ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-r-transparent" />
+                    Saving...
+                  </>
+                ) : (
+                  isEditMode ? "Save Changes" : "Save & Close"
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={handleNext}
+                className="text-sm font-bold text-white bg-blue-600 px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors"
+              >
+                Next: Pricing & Details →
+              </button>
+            </div>
           ) : (
             <button
               type="submit"
