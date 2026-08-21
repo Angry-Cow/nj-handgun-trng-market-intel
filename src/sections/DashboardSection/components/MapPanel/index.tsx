@@ -38,7 +38,7 @@ export const MapPanel = ({ countyFilter, typeFilter, externalSelectedId, onExter
               });
               if (!match) return false;
             }
-            if (typeFilter && c.facilityType !== typeFilter) return false;
+            if (typeFilter && !(c.facilityType ?? "").split(",").map((t) => t.trim()).includes(typeFilter)) return false;
             return true;
           })
           .map((c) => c.id)
@@ -87,7 +87,7 @@ export const MapPanel = ({ countyFilter, typeFilter, externalSelectedId, onExter
             <div className="flex items-start justify-between mb-6">
               <div>
                 <h4 className="text-xl font-bold leading-7 mb-1">{selected.facilityName}</h4>
-                <span className={`text-[10px] font-black text-white ${TYPE_COLORS[selected.facilityType] ?? "bg-gray-400"} px-3 py-1 rounded-full uppercase tracking-wider`}>{selected.facilityType}</span>
+                <span className={`text-[10px] font-black text-white ${TYPE_COLORS[(selected.facilityType ?? "").split(", ")[0]] ?? "bg-gray-400"} px-3 py-1 rounded-full uppercase tracking-wider`}>{(selected.facilityType ?? "").split(", ").map((t) => t.charAt(0).toUpperCase() + t.slice(1)).join(" · ")}</span>
               </div>
               <button onClick={() => setSelectedId(null)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
             </div>

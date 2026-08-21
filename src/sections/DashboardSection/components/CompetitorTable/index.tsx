@@ -83,7 +83,7 @@ export const CompetitorTable = ({ countyFilter, typeFilter, priceFilter, onRowCl
       });
       if (!match) return false;
     }
-    if (typeFilter && c.facilityType !== typeFilter) return false;
+    if (typeFilter && !(c.facilityType ?? "").split(",").map((t) => t.trim()).includes(typeFilter)) return false;
     if (priceFilter === "<100" && (c.ccwPrepPrice ?? 9999) >= 100) return false;
     if (priceFilter === "100-199" && ((c.ccwPrepPrice ?? 0) < 100 || (c.ccwPrepPrice ?? 0) > 199)) return false;
     if (priceFilter === "200+" && (c.ccwPrepPrice ?? 0) < 200) return false;
@@ -274,7 +274,7 @@ export const CompetitorTable = ({ countyFilter, typeFilter, priceFilter, onRowCl
                         )}
                       </td>
                       <td className="box-border caret-transparent align-middle px-8 py-5">
-                        <span className="text-gray-500 text-[10px] font-black bg-gray-100 box-border caret-transparent tracking-[1px] leading-[15px] uppercase px-3 py-1 rounded-full whitespace-nowrap">{c.facilityType}</span>
+                        <span className="text-gray-500 text-[10px] font-black bg-gray-100 box-border caret-transparent tracking-[1px] leading-[15px] uppercase px-3 py-1 rounded-full whitespace-nowrap">{(c.facilityType ?? "").split(", ").map((t) => t.charAt(0).toUpperCase() + t.slice(1)).join(" · ")}</span>
                       </td>
                       <td className="text-sm font-semibold box-border caret-transparent leading-5 align-middle px-8 py-5">
                         {c.county}

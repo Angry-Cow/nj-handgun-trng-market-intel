@@ -206,7 +206,7 @@ export const MapContainer = ({ competitors, filteredIds, selectedId, onSelect }:
 
     // Render inactive (dimmed) markers first — never clustered
     inactiveCompetitors.forEach((c) => {
-      const color = TYPE_COLORS[c.facilityType] ?? DEFAULT_COLOR;
+      const color = TYPE_COLORS[(c.facilityType ?? "").split(", ")[0]] ?? DEFAULT_COLOR;
       const icon = makeMarkerIcon(color, false, false, c.needsVerification);
       const marker = L.marker([c.latitude, c.longitude], { icon, zIndexOffset: -1000 });
       layerGroup.addLayer(marker);
@@ -227,7 +227,7 @@ export const MapContainer = ({ competitors, filteredIds, selectedId, onSelect }:
         if (cluster.items.length === 1) {
           // Single item — render as normal marker
           const c = cluster.items[0].comp;
-          const color = TYPE_COLORS[c.facilityType] ?? DEFAULT_COLOR;
+          const color = TYPE_COLORS[(c.facilityType ?? "").split(", ")[0]] ?? DEFAULT_COLOR;
           const isSelected = c.id === currentSelectedId;
           const icon = makeMarkerIcon(color, isSelected, true, c.needsVerification);
           const marker = L.marker([c.latitude, c.longitude], {
@@ -269,7 +269,7 @@ export const MapContainer = ({ competitors, filteredIds, selectedId, onSelect }:
     } else {
       // No clustering — render all active markers individually
       activeCompetitors.forEach((c) => {
-        const color = TYPE_COLORS[c.facilityType] ?? DEFAULT_COLOR;
+        const color = TYPE_COLORS[(c.facilityType ?? "").split(", ")[0]] ?? DEFAULT_COLOR;
         const isSelected = c.id === currentSelectedId;
         const icon = makeMarkerIcon(color, isSelected, true, c.needsVerification);
         const marker = L.marker([c.latitude, c.longitude], {
@@ -328,7 +328,7 @@ export const MapContainer = ({ competitors, filteredIds, selectedId, onSelect }:
       L.popup({ offset: [0, -8], maxWidth: 220 }).setContent(
         `<div style="font-family:sans-serif;font-size:12px;line-height:1.5">
           <div style="font-weight:800;font-size:13px;margin-bottom:2px;color:#1e293b">${escapeHtml(c.facilityName)}</div>
-          <div style="color:#64748b;margin-bottom:4px">${escapeHtml(c.county)} &middot; ${escapeHtml(c.facilityType)}</div>
+          <div style="color:#64748b;margin-bottom:4px">${escapeHtml(c.county)} &middot; ${escapeHtml((c.facilityType ?? "").split(", ").map((t) => t.charAt(0).toUpperCase() + t.slice(1)).join(" · "))}</div>
           ${priceLines.length ? `<div>${priceLines.join(" &nbsp;·&nbsp; ")}</div>` : ""}
           ${c.needsVerification ? `<div style="margin-top:6px;color:#b45309;font-size:10px">⚠ Needs verification</div>` : ""}
         </div>`

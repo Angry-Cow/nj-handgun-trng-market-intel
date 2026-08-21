@@ -370,7 +370,9 @@ export const DataCollectionPanel = () => {
                 }
 
                 const existing = (existingCompetitors ?? []).find(
-                  (c) => c.facilityName.toLowerCase().replace(/[^a-z0-9]/g, "") === normName,
+                  (c) =>
+                    c.facilityName.toLowerCase().replace(/[^a-z0-9]/g, "") === normName &&
+                    c.county === county,
                 );
 
                 const recordData = {
@@ -403,6 +405,16 @@ export const DataCollectionPanel = () => {
                   if (recordData.servicesOffered && (!existing.servicesOffered || existing.servicesOffered === pType)) updates.servicesOffered = recordData.servicesOffered;
                   if (recordData.dataConfidence > existing.dataConfidence) updates.dataConfidence = recordData.dataConfidence;
                   if (recordData.needsVerification !== existing.needsVerification) updates.needsVerification = recordData.needsVerification;
+
+                  // Append the provider type if it's not already listed
+                  const existingTypes = (existing.facilityType ?? "")
+                    .split(",")
+                    .map((t: string) => t.trim())
+                    .filter(Boolean);
+                  if (!existingTypes.includes(pType)) {
+                    updates.facilityType = [...existingTypes, pType].sort().join(", ");
+                  }
+
                   updates.dateAccessed = recordData.dateAccessed;
                   updates.notes = recordData.notes;
 

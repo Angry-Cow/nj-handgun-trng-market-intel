@@ -289,8 +289,8 @@ export const ProviderDetailPanel = ({ competitor, onClose, onFlyTo }: Props) => 
                   <h2 className="text-xl font-bold leading-tight text-gray-900 truncate">{competitor.facilityName}</h2>
                 )}
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
-                  <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider ${TYPE_COLORS[competitor.facilityType] ?? "bg-gray-400 text-white"}`}>
-                    {competitor.facilityType}
+                  <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider ${TYPE_COLORS[(competitor.facilityType ?? "").split(", ")[0]] ?? "bg-gray-400 text-white"}`}>
+                    {(competitor.facilityType ?? "").split(", ").map((t) => t.charAt(0).toUpperCase() + t.slice(1)).join(" · ")}
                   </span>
                   <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider border ${getConfColor(competitor.dataConfidence)}`}>
                     {competitor.dataConfidence}% confidence
