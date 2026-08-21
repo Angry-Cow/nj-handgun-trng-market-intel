@@ -434,7 +434,7 @@ export const AddCompetitorModal = ({ onClose, onCreate, onUpdate, editData, isMu
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={handleSubmit}
+                onClick={() => { if (validateStep1()) handleSubmit({ preventDefault: () => {} } as React.FormEvent); }}
                 disabled={isMutating}
                 className="text-sm font-bold text-blue-600 bg-white border border-blue-200 px-6 py-3 rounded-xl hover:bg-blue-50 transition-colors disabled:opacity-50 flex items-center gap-2"
               >

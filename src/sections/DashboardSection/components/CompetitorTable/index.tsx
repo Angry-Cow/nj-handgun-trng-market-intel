@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { ShieldCheck, ShieldAlert, ShieldX } from "lucide-react";
 import { useQuery } from "@/lib/useQuery";
 import { useMutation } from "@/lib/useMutation";
+import { emitRefresh } from "@/lib/useQuery";
 import { safeUrl } from "@/lib/sanitize";
 import { TableFilters } from "@/sections/DashboardSection/components/CompetitorTable/TableFilters";
 import { AddCompetitorModal } from "@/sections/DashboardSection/components/CompetitorTable/AddCompetitorModal";
@@ -47,6 +48,7 @@ export const CompetitorTable = ({ countyFilter, typeFilter, priceFilter, onRowCl
         county: c.county,
         normalizedName: normalizeName(c.facilityName),
       });
+      emitRefresh("DeletedCompetitor");
     } catch (e) {
       console.error("Failed to add to blocklist:", e);
     }

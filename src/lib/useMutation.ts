@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "./supabase";
+import { emitRefresh } from "./useQuery";
 
 export type UseMutationResult = {
   create: (data: any) => Promise<any>;
@@ -26,6 +27,7 @@ export function useMutation(entityName: string): UseMutationResult {
       setError(err as Error);
       throw err;
     }
+    emitRefresh(entityName);
     return data;
   };
 
@@ -43,6 +45,7 @@ export function useMutation(entityName: string): UseMutationResult {
       setError(err as Error);
       throw err;
     }
+    emitRefresh(entityName);
     return data;
   };
 
@@ -55,6 +58,7 @@ export function useMutation(entityName: string): UseMutationResult {
       setError(err as Error);
       throw err;
     }
+    emitRefresh(entityName);
     return true;
   };
 
