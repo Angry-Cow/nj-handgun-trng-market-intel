@@ -34,6 +34,23 @@ export const CompetitorTable = ({ countyFilter, typeFilter, priceFilter, onRowCl
 
   const { data: competitors, isPending, error } = useQuery("Competitor");
   const { create, update, remove, isPending: isMutating } = useMutation("Competitor");
+  const { create: createDeleted } = useMutation("DeletedCompetitor");
+
+  const normalizeName = (name: string) =>
+    name.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  const addToBlocklist = async (c: { facilityName: string; address?: string; county: string }) => {
+    try {
+      await createDeleted({
+        facilityName: c.facilityName,
+        address: c.address ?? null,
+        county: c.county,
+        normalizedName: normalizeName(c.facilityName),
+      });
+    } catch (e) {
+      console.error("Failed to add to blocklist:", e);
+    }
+  };
 
   const openEditModal = (c: any) => setEditingCompetitor(c);
   const closeEditModal = () => setEditingCompetitor(null);
@@ -103,6 +120,8 @@ export const CompetitorTable = ({ countyFilter, typeFilter, priceFilter, onRowCl
 
   const handleDelete = async (id: string) => {
     if (confirm("Remove this competitor record?")) {
+      const competitor = (competitors ?? []).find((c) => c.id === id);
+      if (competitor) await addToBlocklist(competitor);
       await remove(id);
       setSelectedIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
     }
@@ -141,6 +160,8 @@ export const CompetitorTable = ({ countyFilter, typeFilter, priceFilter, onRowCl
     setBulkDeleting(true);
     try {
       for (const id of Array.from(selectedIds)) {
+        const competitor = (competitors ?? []).find((c) => c.id === id);
+        if (competitor) await addToBlocklist(competitor);
         await remove(id);
       }
       setSelectedIds(new Set());

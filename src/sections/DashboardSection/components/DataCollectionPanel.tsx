@@ -88,6 +88,7 @@ export const DataCollectionPanel = () => {
   const { create: createCompetitor, update: updateCompetitor } = useMutation("Competitor");
   const { create: createSourceLog } = useMutation("SourceLog");
   const { data: existingCompetitors } = useQuery("Competitor");
+  const { data: deletedCompetitors } = useQuery("DeletedCompetitor");
 
   // Fetch all counties from DB
   const { data: countyRecords, isPending: countiesLoading } = useQuery(
@@ -359,6 +360,15 @@ export const DataCollectionPanel = () => {
               if (abortRef.current) break;
               try {
                 const normName = r.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+                // Skip if this provider was previously deleted from this county
+                const wasDeleted = (deletedCompetitors ?? []).some(
+                  (d) => d.normalizedName === normName && d.county === county,
+                );
+                if (wasDeleted) {
+                  continue;
+                }
+
                 const existing = (existingCompetitors ?? []).find(
                   (c) => c.facilityName.toLowerCase().replace(/[^a-z0-9]/g, "") === normName,
                 );
@@ -454,7 +464,7 @@ export const DataCollectionPanel = () => {
         setRunningId(null);
       }
     },
-    [countyRecords, update, createCompetitor, updateCompetitor, createSourceLog, scanProviders, existingCompetitors],
+    [countyRecords, update, createCompetitor, updateCompetitor, createSourceLog, scanProviders, existingCompetitors, deletedCompetitors],
   );
 
   // ─── Start a pending run from the history table ──────────────────────
